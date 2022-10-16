@@ -171,11 +171,6 @@ add_library(IRRMESHOBJ OBJECT
 	${IRRMESHLOADER}
 )
 
-target_link_libraries(IRRMESHOBJ
-	PRIVATE
-		tinygltf::tinygltf
-)
-
 add_library(IRROBJ OBJECT
 	CBillboardSceneNode.cpp
 	CCameraSceneNode.cpp
@@ -306,7 +301,11 @@ target_include_directories(IrrlichtMt
 		${link_includes}
 )
 
-target_link_libraries(IrrlichtMt PRIVATE ${link_libs})
+target_link_libraries(IrrlichtMt
+	PRIVATE
+		tinygltf::tinygltf
+		${link_libs}
+)
 
 # Propagate static library flag to lib users, only needed for Windows
 if(NOT BUILD_SHARED_LIBS)
@@ -325,7 +324,7 @@ endif()
 if(ANDROID)
 	set(INSTALL_TARGETS IrrlichtMt native_app_glue)
 else()
-	set(INSTALL_TARGETS IrrlichtMt)
+	set(INSTALL_TARGETS IrrlichtMt tinygltf)
 endif()
 
 install(TARGETS ${INSTALL_TARGETS}
