@@ -171,6 +171,11 @@ add_library(IRRMESHOBJ OBJECT
 	${IRRMESHLOADER}
 )
 
+target_link_libraries(IRRMESHOBJ
+	PRIVATE
+		tinygltf::tinygltf
+)
+
 add_library(IRROBJ OBJECT
 	CBillboardSceneNode.cpp
 	CCameraSceneNode.cpp
