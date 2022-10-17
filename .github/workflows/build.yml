@@ -17,11 +17,11 @@ jobs:
       - name: Install deps
         run: |
           apt-get update
-          apt-get install g++ cmake ninja-build libxi-dev libgl1-mesa-dev libpng-dev libjpeg-dev zlib1g-dev -qyy
+          apt-get install g++ cmake libxi-dev libgl1-mesa-dev libpng-dev libjpeg-dev zlib1g-dev -qyy
 
       - name: Build
         run: |
-          cmake -S . -B . -G Ninja
+          cmake .
           make VERBOSE=1
     
       - name: Test
