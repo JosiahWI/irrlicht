@@ -3,6 +3,7 @@
 #include "IAnimatedMesh.h"
 #include "IReadFile.h"
 #include "path.h"
+#include "SAnimatedMesh.h"
 
 namespace irr
 {
@@ -22,7 +23,14 @@ bool CGLTFMeshFileLoader::isALoadableFileExtension(
 
 IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 {
-	return nullptr;
+	if (file->getSize() == 0) {
+		return nullptr;
+	}
+
+	// sorry Bjarne
+	SAnimatedMesh* mesh { new SAnimatedMesh {} };
+
+	return mesh;
 }
 
 } // namespace irr
