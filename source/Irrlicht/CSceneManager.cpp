@@ -33,6 +33,10 @@
 #include "CB3DMeshFileLoader.h"
 #endif
 
+#ifdef _IRR_COMPILE_WITH_GLTF_LOADER_
+#include "CGLTFMeshFileLoader.h"
+#endif
+
 #ifdef _IRR_COMPILE_WITH_BILLBOARD_SCENENODE_
 #include "CBillboardSceneNode.h"
 #endif // _IRR_COMPILE_WITH_BILLBOARD_SCENENODE_
@@ -104,6 +108,9 @@ CSceneManager::CSceneManager(video::IVideoDriver* driver, io::IFileSystem* fs,
 	#endif
 	#ifdef _IRR_COMPILE_WITH_B3D_LOADER_
 	MeshLoaderList.push_back(new CB3DMeshFileLoader(this));
+	#endif
+	#ifdef _IRR_COMPILE_WITH_GLTF_LOADER_
+	MeshLoaderList.push_back(new CGLTFMeshFileLoader());
 	#endif
 }
 
