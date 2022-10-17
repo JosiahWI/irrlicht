@@ -22,7 +22,7 @@ jobs:
       - name: Build
         run: |
           cmake -S . -B . -G Ninja
-          cmake --build . -v
+          cmake --build . -- VERBOSE=1
     
       - name: Test
         run: |
