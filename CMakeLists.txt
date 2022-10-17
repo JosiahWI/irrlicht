@@ -38,6 +38,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+add_subdirectory(source/lib/catch2)
 add_subdirectory(source/lib/tinygltf)
 add_subdirectory(source/Irrlicht)
 
