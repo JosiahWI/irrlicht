@@ -324,7 +324,7 @@ endif()
 if(ANDROID)
 	set(INSTALL_TARGETS IrrlichtMt native_app_glue)
 else()
-	set(INSTALL_TARGETS IrrlichtMt tinygltf)
+	set(INSTALL_TARGETS IrrlichtMt)
 endif()
 
 install(TARGETS ${INSTALL_TARGETS}
