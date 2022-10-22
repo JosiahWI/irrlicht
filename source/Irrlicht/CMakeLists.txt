@@ -266,10 +266,10 @@ target_include_directories(IrrlichtMt
 		"${PROJECT_SOURCE_DIR}/include"
 		"${CMAKE_CURRENT_SOURCE_DIR}"
 
-		"${ZLIB_INCLUDE_DIR}"
-		"${JPEG_INCLUDE_DIR}"
-		"${PNG_INCLUDE_DIR}"
-		"${SDL2_INCLUDE_DIRS}"
+		${ZLIB_INCLUDE_DIR}
+		${JPEG_INCLUDE_DIR}
+		${PNG_INCLUDE_DIR}
+		${SDL2_INCLUDE_DIRS}
 
 		${OPENGL_INCLUDE_DIR}
 		${OPENGLES2_INCLUDE_DIR}
@@ -281,10 +281,10 @@ target_include_directories(IrrlichtMt
 
 target_link_libraries(IrrlichtMt
 	PRIVATE
-		"${ZLIB_LIBRARY}"
-		"${JPEG_LIBRARY}"
-		"${PNG_LIBRARY}"
-		"${SDL2_LIBRARIES}"
+		${ZLIB_LIBRARY}
+		${JPEG_LIBRARY}
+		${PNG_LIBRARY}
+		${SDL2_LIBRARIES}
 		tinygltf::tinygltf
 
 		${OPENGL_LIBRARIES}
