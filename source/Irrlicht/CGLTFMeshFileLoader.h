@@ -21,6 +21,8 @@ public:
 
 	IAnimatedMesh* createMesh(io::IReadFile* file) override;
 
+private:
+	bool tryParseGLTF(io::IReadFile* file) const;
 };
 
 } // namespace scene
