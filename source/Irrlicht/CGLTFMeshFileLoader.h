@@ -6,6 +6,8 @@
 #include "IReadFile.h"
 #include "path.h"
 
+#include <tiny_gltf.h>
+
 namespace irr
 {
 
@@ -22,7 +24,7 @@ public:
 	IAnimatedMesh* createMesh(io::IReadFile* file) override;
 
 private:
-	bool tryParseGLTF(io::IReadFile* file) const;
+	bool tryParseGLTF(io::IReadFile* file, tinygltf::Model& model) const;
 };
 
 } // namespace scene
