@@ -22,9 +22,6 @@ public:
 	bool isALoadableFileExtension(const io::path& filename) const override;
 
 	IAnimatedMesh* createMesh(io::IReadFile* file) override;
-
-private:
-	bool tryParseGLTF(io::IReadFile* file, tinygltf::Model& model) const;
 };
 
 } // namespace scene
