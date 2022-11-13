@@ -114,12 +114,12 @@ CIrrDeviceLinux::CIrrDeviceLinux(const SIrrlichtCreationParameters& param)
 	XInputMethod(0), XInputContext(0),
 	HasNetWM(false),
 #endif
-#if defined(_IRR_LINUX_X11_XINPUT2_)
-	currentTouchedCount(0),
-#endif
 	Width(param.WindowSize.Width), Height(param.WindowSize.Height),
 	WindowHasFocus(false), WindowMinimized(false),
 	ExternalWindow(false), AutorepeatSupport(0)
+#if defined(_IRR_LINUX_X11_XINPUT2_)
+	, currentTouchedCount(0)
+#endif
 {
 	#ifdef _DEBUG
 	setDebugName("CIrrDeviceLinux");
