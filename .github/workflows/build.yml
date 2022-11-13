@@ -109,12 +109,15 @@ jobs:
 
       - name: Build
         run: |
-          cmake -G Ninja -DCMAKE_CXX_COMPILER=/usr/bin/g++-5 -DCMAKE_BUILD_TYPE=Release .
+          mkdir build
+          cd build
+          cmake -G Ninja -DCMAKE_CXX_COMPILER=/usr/bin/g++-5 -DCMAKE_BUILD_TYPE=Release ..
           cmake --build .
+          cd ..
 
       - name: Test
         run: |
-          ./bin/Linux/tests
+          ./build/bin/Linux/tests
 
   win32:
     runs-on: ubuntu-20.04
