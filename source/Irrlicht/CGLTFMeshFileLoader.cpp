@@ -52,6 +52,13 @@ private:
 	std::size_t m_offset;
 };
 
+// A helper function to disable tinygltf embedded image loading
+bool turn_off_textures_hack(tinygltf::Image *a, const int b, std::string *c,
+    std::string *d, int e, int f, const unsigned char * g,int h, void *user_pointer)
+{
+    return true;
+};
+
 namespace irr
 {
 
@@ -61,13 +68,18 @@ namespace scene
 static bool tryParseGLTF(io::IReadFile* file, tinygltf::Model& model)
 {
 	tinygltf::TinyGLTF loader {};
+
+    // Stop embedded textures from making model fail to load
+    void *the_void = 0;
+    loader.SetImageLoader(turn_off_textures_hack, the_void);
+
 	std::string err {};
 	std::string warn {};
 
 	auto buf = std::make_unique<char[]>(file->getSize());
 	file->read(buf.get(), file->getSize());
-	return loader.LoadASCIIFromString(
-		&model, &err, &warn, buf.get(), file->getSize(), "", 1);
+
+	return loader.LoadASCIIFromString(&model, &err, &warn, buf.get(), file->getSize(), "", 1);
 }
 
 template <class T>
