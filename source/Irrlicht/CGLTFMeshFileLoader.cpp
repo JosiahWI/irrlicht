@@ -58,7 +58,6 @@ private:
 bool turn_off_textures_hack(tinygltf::Image *a, const int b, std::string *c,
 	std::string *d, int e, int f, const unsigned char * g,int h, void *user_pointer)
 {
-	return false;
 };
 
 namespace irr
