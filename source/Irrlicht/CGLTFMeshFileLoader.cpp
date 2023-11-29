@@ -34,6 +34,13 @@
  * of the vertex indices.
  */
 
+/**
+ * todo list:
+ * https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_componenttype
+ * https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_normalized
+ * 
+*/
+
 // A helper function to disable tinygltf embedded image loading
 static bool dummyImageLoader(tinygltf::Image *a,
 		const int b, std::string *c,
@@ -77,12 +84,18 @@ CGLTFMeshFileLoader::CGLTFMeshFileLoader() noexcept
 {
 }
 
+/**
+ * The most basic portion of the code base. This tells irllicht if this is a gltf file.
+*/
 bool CGLTFMeshFileLoader::isALoadableFileExtension(
 		const io::path& filename) const
 {
 	return core::hasFileExtension(filename, "gltf");
 }
 
+/**
+ * Entry point into loading a GLTF model.
+*/
 IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 {
 	tinygltf::Model model {};
@@ -101,6 +114,12 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 	return animatedMesh;
 }
 
+
+/**
+ * Load up the rawest form of the model. The vertex positions and indices.
+ * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#meshes
+ * If material is undefined, then a default material MUST be used.
+*/
 void CGLTFMeshFileLoader::loadPrimitives(
 		const MeshExtractor& parser,
 		SMesh* mesh)
@@ -130,6 +149,9 @@ CGLTFMeshFileLoader::MeshExtractor::MeshExtractor(
 {
 }
 
+/**
+ * Extracts GLTF mesh indices into the irrlicht model.
+*/
 std::vector<u16> CGLTFMeshFileLoader::MeshExtractor::getIndices(
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
@@ -270,6 +292,12 @@ float CGLTFMeshFileLoader::MeshExtractor::getScale() const
 	return 1.0f;
 }
 
+/**
+ * The number of elements referenced by this accessor, not to be confused with the number of bytes or number of components.
+ * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_count
+ * Type: Integer
+ * Required: YES
+*/
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getElemCount(
 		const std::size_t accessorIdx) const
 {
@@ -284,6 +312,9 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getByteStride(
 	return accessor.ByteStride(view);
 }
 
+/**
+ * Walk through the complex chain of the model to extract the required buffer.
+*/
 CGLTFMeshFileLoader::BufferOffset CGLTFMeshFileLoader::MeshExtractor::getBuffer(
 		const std::size_t accessorIdx) const
 {
@@ -294,12 +325,33 @@ CGLTFMeshFileLoader::BufferOffset CGLTFMeshFileLoader::MeshExtractor::getBuffer(
 	return BufferOffset(buffer.data, view.byteOffset);
 }
 
+/**
+ * The index of the accessor that contains the vertex indices. 
+ * When this is undefined, the primitive defines non-indexed geometry. 
+ * When defined, the accessor MUST have SCALAR type and an unsigned integer component type.
+ * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_mesh_primitive_indices
+ * Type: Integer
+ * Required: NO
+*/
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getIndicesAccessorIdx(
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
 {
 	return m_model.meshes[meshIdx].primitives[primitiveIdx].indices;
 }
+
+/**
+ * The datatype of the accessor’s components.
+ * UNSIGNED_INT type MUST NOT be used for any accessor that is not referenced by mesh.primitive.indices.
+ * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_componenttype
+ * Type: Integer
+ * Required: YES
+*/
+int CGLTFMeshFileLoader::MeshExtractor::getComponentType(const std::size_t accessorIdx) const {
+
+  return m_model.accessors[accessorIdx].componentType;
+}
+
 
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getPositionAccessorIdx(
 		const std::size_t meshIdx,
@@ -339,6 +391,9 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getTCoordAccessorIdx(
 	}
 }
 
+/**
+ * This is where the actual model's GLTF file is loaded and parsed by tinygltf.
+*/
 bool CGLTFMeshFileLoader::tryParseGLTF(io::IReadFile* file,
 		tinygltf::Model& model)
 {
