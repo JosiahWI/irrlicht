@@ -7,7 +7,6 @@
 #include "irrMath.h"
 
 #include <functional>
-#include <ostream>
 
 namespace irr
 {
@@ -456,12 +455,6 @@ namespace core
 			angle.X = round32((f32)(acos(Y * core::reciprocal_squareroot(length)) * RADTODEG64));
 		}
 		return angle;
-	}
-
-	template <typename T>
-	std::ostream& operator<<(std::ostream& os, vector3d<T> value) {
-		os << '{' << value.X << ", " << value.Y << ", " << value.Z << "}";
-		return os;
 	}
 
 	//! Typedef for a f32 3d vector.
