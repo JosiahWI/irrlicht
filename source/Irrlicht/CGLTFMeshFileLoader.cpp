@@ -342,7 +342,7 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getIndicesAccessorIdx(
 */
 int CGLTFMeshFileLoader::MeshExtractor::getComponentType(const std::size_t accessorIdx) const {
 
-  return m_model.accessors[accessorIdx].componentType;
+	return m_model.accessors[accessorIdx].componentType;
 }
 
 
