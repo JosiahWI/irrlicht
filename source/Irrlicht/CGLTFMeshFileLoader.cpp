@@ -34,13 +34,6 @@
  * of the vertex indices.
  */
 
-/**
- * todo list:
- * https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_componenttype
- * https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_normalized
- * 
-*/
-
 // A helper function to disable tinygltf embedded image loading
 static bool dummyImageLoader(tinygltf::Image *a,
 		const int b, std::string *c,
