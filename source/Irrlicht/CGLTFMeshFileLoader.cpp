@@ -249,6 +249,10 @@ void CGLTFMeshFileLoader::MeshExtractor::copyNormals(
 	}
 }
 
+/**
+ * Streams texture coordinate raw data into usable buffer via reference.
+ * Buffer: ref Vector<video::S3DVertex>
+*/
 void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 		const std::size_t accessorIdx,
 		std::vector<vertex_t>& vertices) const
