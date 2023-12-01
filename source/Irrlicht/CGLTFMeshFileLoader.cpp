@@ -328,6 +328,12 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getIndicesAccessorIdx(
 	return m_model.meshes[meshIdx].primitives[primitiveIdx].indices;
 }
 
+/**
+ * The index of the accessor that contains the POSITIONs.
+ * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#meshes-overview
+ * Type: VEC3 (Float)
+ * ! Required: YES (Appears so, needs another pair of eyes to research.)
+*/
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getPositionAccessorIdx(
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
@@ -336,6 +342,12 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getPositionAccessorIdx(
 		.attributes.find("POSITION")->second;
 }
 
+/**
+ * The index of the accessor that contains the NORMALs.
+ * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#meshes-overview
+ * Type: VEC3 (Float)
+ * ! Required: YES (Appears so, needs another pair of eyes to research.)
+*/
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getNormalAccessorIdx(
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
@@ -351,6 +363,12 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getNormalAccessorIdx(
 	}
 }
 
+/**
+ * The index of the accessor that contains the NORMALs.
+ * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#meshes-overview
+ * Type: VEC3 (Float)
+ * ! Required: YES (Appears so, needs another pair of eyes to research.)
+*/
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getTCoordAccessorIdx(
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
