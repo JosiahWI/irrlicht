@@ -200,6 +200,10 @@ T CGLTFMeshFileLoader::MeshExtractor::readPrimitive(
 	return dest;
 }
 
+/**
+ * Read a vector2df from a buffer at an offset.
+ * @return vec2 core::Vector2df
+*/
 core::vector2df CGLTFMeshFileLoader::MeshExtractor::readVec2DF(
 		const CGLTFMeshFileLoader::BufferOffset& readFrom)
 {
