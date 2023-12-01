@@ -23,10 +23,6 @@
 #include <utility>
 #include <vector>
 
-//! debugging and prototyping libraries
-#include <iostream>
-#include <string>
-
 /* Notes on the coordinate system.
  *
  * glTF uses a right-handed coordinate system where +Z is the
@@ -299,20 +295,11 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 	const auto& buffer = getBuffer(accessorIdx);
 	const auto count = getElemCount(accessorIdx);
 
-	const auto acc = m_model.accessors[accessorIdx];
-	const auto min = acc.minValues;
-
-	const auto normalized = isAccessorNormalized(accessorIdx);
-
-	printf((std::string("is this normalized? ") + std::to_string(normalized)).c_str());
-	printf("\n");
-
-	std::cout << "testing: ";
-	for (uint i = 0; i < min.size(); i++) {
-		std::cout << min.at(i) << ", ";
-	}
-	std::cout << "\n";
-
+	// Reference material for Josiah.
+	// const auto normalized = isAccessorNormalized(accessorIdx);
+	// const auto acc = m_model.accessors[accessorIdx];
+	// const auto min = acc.minValues;
+	// const auto max = acc.maxValues;
 
 	for (std::size_t i = 0; i < count; ++i) {
 		const auto t = readVec2DF(BufferOffset(buffer,
