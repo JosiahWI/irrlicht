@@ -295,12 +295,6 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 	const auto& buffer = getBuffer(accessorIdx);
 	const auto count = getElemCount(accessorIdx);
 
-	// Reference material for Josiah.
-	// const auto normalized = isAccessorNormalized(accessorIdx);
-	// const auto acc = m_model.accessors[accessorIdx];
-	// const auto min = acc.minValues;
-	// const auto max = acc.maxValues;
-
 	for (std::size_t i = 0; i < count; ++i) {
 		const auto t = readVec2DF(BufferOffset(buffer,
 			2 * sizeof(float) * i));
