@@ -236,7 +236,7 @@ core::vector2df CGLTFMeshFileLoader::MeshExtractor::readVec2DF(
 */
 core::vector3df CGLTFMeshFileLoader::MeshExtractor::readVec3DF(
 		const BufferOffset& readFrom,
-		const core::vector3df scale)
+		const core::vector3df scale = {1,1,1})
 {
 	return core::vector3df(
 		scale.X * readPrimitive<float>(readFrom),
@@ -278,7 +278,7 @@ void CGLTFMeshFileLoader::MeshExtractor::copyNormals(
 	
 	for (std::size_t i = 0; i < count; i++) {
 		const auto n = readVec3DF(BufferOffset(buffer,
-			3 * sizeof(float) * i), core::vector3df{1,1,1});
+			3 * sizeof(float) * i));
 		vertices[i].Normal = n;
 	}
 }
