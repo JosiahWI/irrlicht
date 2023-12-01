@@ -291,8 +291,10 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 
 /**
  * Gets the scale of a model's node via a reference Vector3df.
+ * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#reference-node
+ * Type: number[3] (tinygltf: vector<double>)
+ * Required: NO
  * ! There is no where else where .nodes is used so I will document this here for now.
- * ? Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#reference-node
  * ? When the node contains skin, all mesh.primitives MUST contain JOINTS_0 and WEIGHTS_0 attributes.
  * @returns: core::vector2df
 */
