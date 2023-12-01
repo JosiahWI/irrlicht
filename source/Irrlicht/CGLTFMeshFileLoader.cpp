@@ -210,12 +210,12 @@ core::vector2df CGLTFMeshFileLoader::MeshExtractor::readVec2DF(
 
 core::vector3df CGLTFMeshFileLoader::MeshExtractor::readVec3DF(
 		const BufferOffset& readFrom,
-		const float scale)
+		const core::vector3df scale)
 {
 	return core::vector3df(
-		scale * readPrimitive<float>(readFrom),
-		scale * readPrimitive<float>(BufferOffset(readFrom, sizeof(float))),
-		-scale * readPrimitive<float>(BufferOffset(readFrom, 2 *
+		scale.X * readPrimitive<float>(readFrom),
+		scale.Y * readPrimitive<float>(BufferOffset(readFrom, sizeof(float))),
+		-scale.Z * readPrimitive<float>(BufferOffset(readFrom, 2 *
 		sizeof(float))));
 }
 
@@ -244,7 +244,7 @@ void CGLTFMeshFileLoader::MeshExtractor::copyNormals(
 	
 	for (std::size_t i = 0; i < count; i++) {
 		const auto n = readVec3DF(BufferOffset(buffer,
-			3 * sizeof(float) * i));
+			3 * sizeof(float) * i), core::vector3df{1,1,1});
 		vertices[i].Normal = n;
 	}
 }
@@ -269,15 +269,19 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 }
 
 /**
- * Gets the scale of a model's node as a scalar value.
+ * Gets the scale of a model's node via a reference Vector3df.
+ * @returns: core::vector2df
 */
-float CGLTFMeshFileLoader::MeshExtractor::getScale() const
+core::vector3df CGLTFMeshFileLoader::MeshExtractor::getScale() const
 {
-	if (m_model.nodes[0].scale.size() > 0) {
-		return static_cast<float>(m_model.nodes[0].scale[0]);
+	core::vector3df buffer{1,1,1};
+	//! Fixme: What if there is more than one node?
+	if (m_model.nodes[0].scale.size() == 3) {
+		buffer.X = static_cast<float>(m_model.nodes[0].scale[0]);
+		buffer.Y = static_cast<float>(m_model.nodes[0].scale[1]);
+		buffer.Z = static_cast<float>(m_model.nodes[0].scale[2]);
 	}
-
-	return 1.0f;
+	return buffer;
 }
 
 /**
