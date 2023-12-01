@@ -98,13 +98,15 @@ private:
 
 		/* Get the scale factor from the glTF mesh information.
 		 *
-		 * Returns 1.0f if no scale factor is present.
+		 * Returns vec3(1.0, 1.0, 1.0) if no scale factor is present.
 		 */
 		core::vector3df getScale() const;
 
 		std::size_t getElemCount(const std::size_t accessorIdx) const;
 
 		std::size_t getByteStride(const std::size_t accessorIdx) const;
+
+
 
 		BufferOffset getBuffer(const std::size_t accessorIdx) const;
 
