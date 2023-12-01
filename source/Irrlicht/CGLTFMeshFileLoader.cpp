@@ -236,12 +236,12 @@ core::vector2df CGLTFMeshFileLoader::MeshExtractor::readVec2DF(
 */
 core::vector3df CGLTFMeshFileLoader::MeshExtractor::readVec3DF(
 		const BufferOffset& readFrom,
-		const core::vector3df scale = {1,1,1})
+		const float scale = 1.0f)
 {
 	return core::vector3df(
-		scale.X * readPrimitive<float>(readFrom),
-		scale.Y * readPrimitive<float>(BufferOffset(readFrom, sizeof(float))),
-		-scale.Z * readPrimitive<float>(BufferOffset(readFrom, 2 *
+		scale * readPrimitive<float>(readFrom),
+		scale * readPrimitive<float>(BufferOffset(readFrom, sizeof(float))),
+		-scale * readPrimitive<float>(BufferOffset(readFrom, 2 *
 		sizeof(float))));
 }
 
@@ -307,20 +307,15 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
  * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#reference-node
  * Type: number[3] (tinygltf: vector<double>)
  * Required: NO
- * ! There is no where else where .nodes is used so I will document this here for now.
- * ? When the node contains skin, all mesh.primitives MUST contain JOINTS_0 and WEIGHTS_0 attributes.
  * @returns: core::vector2df
 */
-core::vector3df CGLTFMeshFileLoader::MeshExtractor::getScale() const
+float CGLTFMeshFileLoader::MeshExtractor::getScale() const
 {
-	core::vector3df buffer{1,1,1};
-	//! Fixme: What if there is more than one node?
-	if (m_model.nodes[0].scale.size() == 3) {
-		buffer.X = static_cast<float>(m_model.nodes[0].scale[0]);
-		buffer.Y = static_cast<float>(m_model.nodes[0].scale[1]);
-		buffer.Z = static_cast<float>(m_model.nodes[0].scale[2]);
+	if (m_model.nodes[0].scale.size() > 0) {
+		return static_cast<float>(m_model.nodes[0].scale[0]);
 	}
-	return buffer;
+
+	return 1.0f;
 }
 
 /**
