@@ -78,7 +78,7 @@ CGLTFMeshFileLoader::CGLTFMeshFileLoader() noexcept
 }
 
 /**
- * The most basic portion of the code base. This tells irllicht if this is a gltf file.
+ * The most basic portion of the code base. This tells irllicht if this file has a .gltf extension.
 */
 bool CGLTFMeshFileLoader::isALoadableFileExtension(
 		const io::path& filename) const
