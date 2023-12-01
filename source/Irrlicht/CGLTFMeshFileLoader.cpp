@@ -333,19 +333,6 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getIndicesAccessorIdx(
 	return m_model.meshes[meshIdx].primitives[primitiveIdx].indices;
 }
 
-/**
- * The datatype of the accessor’s components.
- * UNSIGNED_INT type MUST NOT be used for any accessor that is not referenced by mesh.primitive.indices.
- * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_componenttype
- * Type: Integer
- * Required: YES
-*/
-int CGLTFMeshFileLoader::MeshExtractor::getComponentType(const std::size_t accessorIdx) const {
-
-	return m_model.accessors[accessorIdx].componentType;
-}
-
-
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getPositionAccessorIdx(
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
