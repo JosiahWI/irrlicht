@@ -284,6 +284,13 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getElemCount(
 	return m_model.accessors[accessorIdx].count;
 }
 
+/**
+ * The stride, in bytes, between vertex attributes.
+ * When this is not defined, data is tightly packed.
+ * When two or more accessors use the same buffer view, this field MUST be defined.
+ * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_bufferview_bytestride
+ * Required: NO
+*/
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getByteStride(
 		const std::size_t accessorIdx) const
 {
