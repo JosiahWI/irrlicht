@@ -301,6 +301,7 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getByteStride(
 
 /**
  * Walk through the complex chain of the model to extract the required buffer.
+ * Accessor -> BufferView -> Buffer
 */
 CGLTFMeshFileLoader::BufferOffset CGLTFMeshFileLoader::MeshExtractor::getBuffer(
 		const std::size_t accessorIdx) const
