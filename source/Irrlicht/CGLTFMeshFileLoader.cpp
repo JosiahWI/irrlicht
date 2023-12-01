@@ -12,6 +12,7 @@
 #include "SColor.h"
 #include "SMesh.h"
 #include "vector3d.h"
+#include <iostream>
 
 #define TINYGLTF_IMPLEMENTATION
 #include <tiny_gltf.h>
@@ -291,8 +292,19 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 		const std::size_t accessorIdx,
 		std::vector<vertex_t>& vertices) const
 {
+
 	const auto& buffer = getBuffer(accessorIdx);
 	const auto count = getElemCount(accessorIdx);
+	
+	const auto acc = m_model.accessors[accessorIdx];
+	const auto min = acc.minValues;
+
+	std::cout << "testing: ";
+	for (uint i = 0; i < min.size(); i++) {
+		std::cout << min.at(i) << ", ";
+	}
+	std::cout << "\n";
+
 
 	for (std::size_t i = 0; i < count; ++i) {
 		const auto t = readVec2DF(BufferOffset(buffer,
