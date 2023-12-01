@@ -186,7 +186,13 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getPrimitiveCount(
 	return m_model.meshes[meshIdx].primitives.size();
 }
 
-
+/**
+ * Templated buffer reader. Based on type width.
+ * This is specifically used to build upon to read more complex data types.
+ * It is also used raw to read arrays directly.
+ * Basically we're using the width of the type to infer 
+ * how big of a gap we have from the beginning of the buffer.
+*/
 template <typename T>
 T CGLTFMeshFileLoader::MeshExtractor::readPrimitive(
 		const BufferOffset& readFrom)
