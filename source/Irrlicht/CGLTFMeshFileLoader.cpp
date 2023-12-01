@@ -12,7 +12,6 @@
 #include "SColor.h"
 #include "SMesh.h"
 #include "vector3d.h"
-#include <iostream>
 
 #define TINYGLTF_IMPLEMENTATION
 #include <tiny_gltf.h>
@@ -23,6 +22,10 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+//! debugging and prototyping libraries
+#include <iostream>
+#include <string>
 
 /* Notes on the coordinate system.
  *
@@ -295,9 +298,14 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 
 	const auto& buffer = getBuffer(accessorIdx);
 	const auto count = getElemCount(accessorIdx);
-	
+
 	const auto acc = m_model.accessors[accessorIdx];
 	const auto min = acc.minValues;
+
+	const auto normalized = isAccessorNormalized(accessorIdx);
+
+	printf((std::string("is this normalized? ") + std::to_string(normalized)).c_str());
+	printf("\n");
 
 	std::cout << "testing: ";
 	for (uint i = 0; i < min.size(); i++) {
