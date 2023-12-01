@@ -175,11 +175,17 @@ std::vector<video::S3DVertex> CGLTFMeshFileLoader::MeshExtractor::getVertices(
 	return vertices;
 }
 
+/**
+ * Get the amount of meshes that a model contains.
+*/
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getMeshCount() const
 {
 	return m_model.meshes.size();
 }
 
+/**
+ * Get the amount of primitives that a mesh in a model contains.
+*/
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getPrimitiveCount(
 		const std::size_t meshIdx) const
 {
