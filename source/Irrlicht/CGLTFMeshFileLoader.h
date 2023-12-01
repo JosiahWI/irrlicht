@@ -102,8 +102,6 @@ private:
 		 */
 		float getScale() const;
 
-    int getComponentType(const std::size_t accessorIdx) const;
-
 		std::size_t getElemCount(const std::size_t accessorIdx) const;
 
 		std::size_t getByteStride(const std::size_t accessorIdx) const;
