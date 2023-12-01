@@ -208,6 +208,10 @@ core::vector2df CGLTFMeshFileLoader::MeshExtractor::readVec2DF(
 
 }
 
+/**
+ * Read a vector3df from a buffer at an offset.
+ * @return vec3 core::Vector3df
+*/
 core::vector3df CGLTFMeshFileLoader::MeshExtractor::readVec3DF(
 		const BufferOffset& readFrom,
 		const core::vector3df scale)
