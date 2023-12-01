@@ -267,6 +267,9 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 	}
 }
 
+/**
+ * Gets the scale of a model's node as a scalar value.
+*/
 float CGLTFMeshFileLoader::MeshExtractor::getScale() const
 {
 	if (m_model.nodes[0].scale.size() > 0) {
