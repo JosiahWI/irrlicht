@@ -54,6 +54,9 @@ CGLTFMeshFileLoader::BufferOffset::BufferOffset(
 {
 }
 
+/**
+ * Get a raw unsigned char (ubyte) from a buffer offset.
+*/
 unsigned char CGLTFMeshFileLoader::BufferOffset::at(
 		const std::size_t fromOffset) const
 {
@@ -150,6 +153,9 @@ std::vector<u16> CGLTFMeshFileLoader::MeshExtractor::getIndices(
 	return indices;
 }
 
+/**
+ * Create a vector of video::S3DVertex (model data) from a mesh & primitive index.
+*/
 std::vector<video::S3DVertex> CGLTFMeshFileLoader::MeshExtractor::getVertices(
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
