@@ -219,6 +219,10 @@ core::vector3df CGLTFMeshFileLoader::MeshExtractor::readVec3DF(
 		sizeof(float))));
 }
 
+/**
+ * Streams vertex positions raw data into usable buffer via reference.
+ * Buffer: ref Vector<video::S3DVertex>
+*/
 void CGLTFMeshFileLoader::MeshExtractor::copyPositions(
 		const std::size_t accessorIdx,
 		std::vector<vertex_t>& vertices) const
