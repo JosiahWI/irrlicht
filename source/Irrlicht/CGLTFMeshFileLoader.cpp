@@ -358,7 +358,7 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getPositionAccessorIdx(
  * The index of the accessor that contains the NORMALs.
  * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#meshes-overview
  * Type: VEC3 (Float)
- * ! Required: YES (Appears so, needs another pair of eyes to research.)
+ * ! Required: NO (Appears to not be, needs another pair of eyes to research.)
 */
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getNormalAccessorIdx(
 		const std::size_t meshIdx,
