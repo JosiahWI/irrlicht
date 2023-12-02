@@ -314,7 +314,6 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 core::vector3df CGLTFMeshFileLoader::MeshExtractor::getScale() const
 {
 	core::vector3df buffer{1,1,1};
-	//! Fixme: What if there is more than one node?
 	if (m_model.nodes[0].scale.size() == 3) {
 		buffer.X = static_cast<float>(m_model.nodes[0].scale[0]);
 		buffer.Y = static_cast<float>(m_model.nodes[0].scale[1]);
