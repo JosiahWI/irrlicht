@@ -7,8 +7,6 @@
 #define CATCH_CONFIG_MAIN
 #include <catch.hpp>
 
-#include <iostream>
-
 using namespace std;
 
 class ScopedMesh
@@ -81,11 +79,7 @@ TEST_CASE("minimal triangle") {
 }
 
 TEST_CASE("blender cube") {
-	auto path = GENERATE(
-		"source/Irrlicht/tests/assets/blender_cube.gltf",
-		"source/Irrlicht/tests/assets/blender_cube_tcoords_8bit.gltf");
-	INFO(path);
-	ScopedMesh sm(path);
+	ScopedMesh sm("source/Irrlicht/tests/assets/blender_cube.gltf");
 	REQUIRE(sm.getMesh() != nullptr);
 	REQUIRE(sm.getMesh()->getMeshBufferCount() == 1);
 	SECTION("vertex coordinates are correct") {
@@ -134,6 +128,35 @@ TEST_CASE("blender cube") {
 		CHECK(vertices[2].TCoords == irr::core::vector2df{0.375f, 0.0f});
 		CHECK(vertices[3].TCoords == irr::core::vector2df{0.6250f, 1.0f});
 		CHECK(vertices[6].TCoords == irr::core::vector2df{0.375f, 0.75f});
+	}
+}
+
+TEST_CASE("blender cube texture coords") {
+	SECTION("8-bit works correctly") {
+		ScopedMesh sm("source/Irrlicht/tests/assets/blender_cube_tcoords_8bit.gltf");
+		REQUIRE(sm.getMesh() != nullptr);
+		REQUIRE(sm.getMesh()->getMeshBufferCount() == 1);
+		REQUIRE(sm.getMesh()->getMeshBuffer(0)->getVertexCount() == 24);
+		const auto* vertices = reinterpret_cast<irr::video::S3DVertex*>(
+			sm.getMesh()->getMeshBuffer(0)->getVertices());
+		CHECK(vertices[0].TCoords == irr::core::vector2df{95, 255} / 255.0f);
+		CHECK(vertices[1].TCoords == irr::core::vector2df{31, 63} / 255.0f);
+		CHECK(vertices[2].TCoords == irr::core::vector2df{95, 0} / 255.0f);
+		CHECK(vertices[5].TCoords == irr::core::vector2df{159, 255} / 255.0f);
+		CHECK(vertices[6].TCoords == irr::core::vector2df{95, 191} / 255.0f);
+	}
+	SECTION("16-bit works correctly") {
+		ScopedMesh sm("source/Irrlicht/tests/assets/blender_cube_tcoords_16bit.gltf");
+		REQUIRE(sm.getMesh() != nullptr);
+		REQUIRE(sm.getMesh()->getMeshBufferCount() == 1);
+		REQUIRE(sm.getMesh()->getMeshBuffer(0)->getVertexCount() == 24);
+		const auto* vertices = reinterpret_cast<irr::video::S3DVertex*>(
+			sm.getMesh()->getMeshBuffer(0)->getVertices());
+		CHECK(vertices[0].TCoords == irr::core::vector2df{24575, 65535} / 65535.0f);
+		CHECK(vertices[1].TCoords == irr::core::vector2df{8191, 16383} / 65535.0f);
+		CHECK(vertices[2].TCoords == irr::core::vector2df{24575, 0} / 65535.0f);
+		CHECK(vertices[5].TCoords == irr::core::vector2df{40959, 65535.0} / 65535.0f);
+		CHECK(vertices[6].TCoords == irr::core::vector2df{24575, 49151} / 65535.0f);
 	}
 }
 

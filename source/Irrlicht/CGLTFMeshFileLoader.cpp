@@ -11,6 +11,7 @@
 #include "SAnimatedMesh.h"
 #include "SColor.h"
 #include "SMesh.h"
+#include "vector2d.h"
 #include "vector3d.h"
 
 #define TINYGLTF_IMPLEMENTATION
@@ -22,6 +23,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <stdexcept>
 
 /* Notes on the coordinate system.
  *
@@ -89,7 +91,11 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 
 	MeshExtractor parser(std::move(model));
 	SMesh* baseMesh(new SMesh {});
-	loadPrimitives(parser, baseMesh);
+	try {
+		loadPrimitives(parser, baseMesh);
+	} catch (const std::runtime_error& error) {
+		return nullptr;
+	}
 
 	SAnimatedMesh* animatedMesh(new SAnimatedMesh {});
 	animatedMesh->addMesh(baseMesh);
@@ -296,10 +302,30 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 
 	const auto& buffer = getBuffer(accessorIdx);
 	const auto count = getElemCount(accessorIdx);
+	const auto& accessor = m_model.accessors[accessorIdx];
+	const auto& component_type = accessor.componentType;
 
 	for (std::size_t i = 0; i < count; ++i) {
-		const auto t = readVec2DF(BufferOffset(buffer,
-			2 * sizeof(float) * i));
+		core::vector2df t;
+		switch (component_type) {
+		case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE: {
+			const u8 u = readPrimitive<u8>(BufferOffset(buffer, 2*i*sizeof(u8)));
+			const u8 v = readPrimitive<u8>(BufferOffset(buffer, 2*i*sizeof(u8) + sizeof(u8)));
+			t = core::vector2df(u / 255.0f, v / 255.0f);
+			break;
+		}
+		case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT: {
+			const u16 u = readPrimitive<u16>(BufferOffset(buffer, 2*i*sizeof(u16)));
+			const u16 v = readPrimitive<u16>(BufferOffset(buffer, 2*i*sizeof(u16) + sizeof(u16)));
+			t = core::vector2df(u / 65535.0f, v / 65535.0f);
+			break;
+		}
+		case TINYGLTF_COMPONENT_TYPE_FLOAT:
+			t = readVec2DF(BufferOffset(buffer, 2*i*sizeof(float)));
+			break;
+		default:
+			throw std::runtime_error("invalid component type for texture coordinates");
+		}
 		vertices[i].TCoords = t;
 	}
 }
@@ -463,12 +489,12 @@ bool CGLTFMeshFileLoader::tryParseGLTF(io::IReadFile* file,
 	auto buf = std::make_unique<char[]>(file->getSize());
 	file->read(buf.get(), file->getSize());
 
-        if (warn != "") {
-                os::Printer::log(warn.c_str(), ELL_WARNING);
-        }
+	if (warn != "") {
+		os::Printer::log(warn.c_str(), ELL_WARNING);
+	}
 
 	if (err != "") {
-                os::Printer::log(err.c_str(), ELL_ERROR);
+        os::Printer::log(err.c_str(), ELL_ERROR);
 		return false;
 	}
 
