@@ -292,21 +292,21 @@ endif()
 
 # Only for the glTF loader and dependents; we can't link targets
 # to object libraries on cmake<3.12 so usage requirements don't
-# propogate to all dependents.
-get_property(tinygltf_INCLUDE_DIRS
-	TARGET tinygltf::tinygltf
+# propagate to all dependents.
+get_property(tiniergltf_INCLUDE_DIRS
+	TARGET tiniergltf
 	PROPERTY INTERFACE_INCLUDE_DIRECTORIES
 )
-get_property(tinygltf_COMPILE_DEFS
-	TARGET tinygltf::tinygltf
+get_property(tiniergltf_COMPILE_DEFS
+	TARGET tiniergltf
 	PROPERTY INTERFACE_COMPILE_DEFINITIONS
 )
 if(CMAKE_VERSION VERSION_LESS 3.12)
-	foreach(TINYGLTF_DEF ${tinygltf_COMPILE_DEFS})
-		add_definitions("-D${TINYGLTF_DEF}")
-	endforeach(TINYGLTF_DEF)
+	foreach(TINIERGLTF_DEF ${tiniergltf_COMPILE_DEFS})
+		add_definitions("-D${TINIERGLTF_DEF}")
+	endforeach(TINIERGLTF_DEF)
 else()
-	add_compile_definitions(${tinygltf_COMPILE_DEFS})
+	add_compile_definitions(${tiniergltf_COMPILE_DEFS})
 endif()
 
 set(link_includes
@@ -316,7 +316,7 @@ set(link_includes
 	"${ZLIB_INCLUDE_DIR}"
 	"${JPEG_INCLUDE_DIR}"
 	"${PNG_INCLUDE_DIR}"
-	"${tinygltf_INCLUDE_DIRS}"
+	"${tiniergltf_INCLUDE_DIRS}"
 	"$<$<BOOL:${USE_SDL2}>:${SDL2_INCLUDE_DIRS}>"
 
 	${OPENGL_INCLUDE_DIR}
@@ -331,7 +331,7 @@ set(link_libs
 	"${ZLIB_LIBRARY}"
 	"${JPEG_LIBRARY}"
 	"${PNG_LIBRARY}"
-	tinygltf::tinygltf
+	tiniergltf
 	"$<$<BOOL:${USE_SDL2}>:${SDL2_LIBRARIES}>"
 
 	${OPENGL_LIBRARIES}
