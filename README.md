@@ -11,7 +11,7 @@ Build
 The build system is CMake.
 
 The following libraries are required to be installed:
-* zlib, libPNG, libJPEG
+* zlib, libPNG, libJPEG, jsoncpp
 * OpenGL
   * or on mobile: OpenGL ES (can be optionally enabled on desktop too)
 * on Unix: X11
