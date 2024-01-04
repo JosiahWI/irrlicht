@@ -328,7 +328,22 @@ struct SSkinMeshBuffer : public IMeshBuffer
 	}
 
 	//! append the vertices and indices to the current buffer
-	void append(const void* const vertices, u32 numVertices, const u16* const indices, u32 numIndices) override {}
+	void append(const void* const vertices, u32 numVertices, const u16* const indices, u32 numIndices) override {
+		if (vertices == getVertices())
+			return;
+
+		const u32 vertexCount = getVertexCount();
+		Vertices_Standard.reallocate(vertexCount + numVertices);
+		for (u32 i=0; i < numVertices; ++i) {
+			Vertices_Standard.push_back(static_cast<const video::S3DVertex* const>(vertices)[i]);
+			BoundingBox.addInternalPoint(static_cast<const video::S3DVertex* const>(vertices)[i].Pos);
+		}
+
+		Indices.reallocate(getIndexCount() + numIndices);
+		for (u32 i=0; i < numIndices; ++i) {
+			Indices.push_back(indices[i] + vertexCount);
+		}
+	}
 
 	//! append the meshbuffer to the current buffer
 	void append(const IMeshBuffer* const other) override {}

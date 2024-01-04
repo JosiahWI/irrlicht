@@ -1,13 +1,11 @@
 #include "CGLTFMeshFileLoader.h"
-#include "CMeshBuffer.h"
+#include "CSkinnedMesh.h"
 #include "coreutil.h"
 #include "IAnimatedMesh.h"
 #include "IReadFile.h"
 #include "irrTypes.h"
 #include "path.h"
 #include "S3DVertex.h"
-#include "SAnimatedMesh.h"
-#include "SMesh.h"
 #include "tiniergltf.hpp"
 #include "vector3d.h"
 #include <cstddef>
@@ -95,19 +93,14 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 	}
 
 	MeshExtractor parser(std::move(model.value()));
-	SMesh* baseMesh(new SMesh {});
+	CSkinnedMesh *mesh = new CSkinnedMesh();
 	try {
-		loadPrimitives(parser, baseMesh);
+		loadPrimitives(parser, mesh);
 	} catch (std::runtime_error &e) {
-		baseMesh->drop();
+		mesh->drop();
 		return nullptr;
 	}
-
-	SAnimatedMesh* animatedMesh(new SAnimatedMesh {});
-	animatedMesh->addMesh(baseMesh);
-	baseMesh->drop();
-
-	return animatedMesh;
+	return mesh;
 }
 
 
@@ -118,7 +111,7 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 */
 void CGLTFMeshFileLoader::loadPrimitives(
 		const MeshExtractor& parser,
-		SMesh* mesh)
+		CSkinnedMesh* mesh)
 {
 	for (std::size_t i = 0; i < parser.getMeshCount(); ++i) {
 		for (std::size_t j = 0; j < parser.getPrimitiveCount(i); ++j) {
@@ -142,11 +135,9 @@ void CGLTFMeshFileLoader::loadPrimitives(
 				}
 			}
 
-			SMeshBuffer* meshbuf(new SMeshBuffer {});
+			auto *meshbuf = mesh->addMeshBuffer();
 			meshbuf->append(vertices->data(), vertices->size(),
 				indices.data(), indices.size());
-			mesh->addMeshBuffer(meshbuf);
-			meshbuf->drop();
 		}
 	}
 }
