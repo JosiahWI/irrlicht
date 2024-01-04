@@ -12,7 +12,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
-#include <jsoncpp/json/json.h>
+#include <json/json.h>
 #include "base64.h"
 
 namespace tiniergltf {
