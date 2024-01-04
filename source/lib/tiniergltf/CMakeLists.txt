@@ -1,6 +1,6 @@
 # CMakeLists of tinygltf, adapted for tiniergltf.
 
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.12)
 
 project(tiniergltf
   VERSION 1.0.0
