@@ -93,7 +93,6 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 			&& model->accessors.has_value()
 			&& model->meshes.has_value()
 			&& model->nodes.has_value())) {
-		throw std::runtime_error("what");
 		return nullptr;
 	}
 
