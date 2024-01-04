@@ -127,6 +127,10 @@ void CGLTFMeshFileLoader::loadPrimitives(
 			std::vector<u16> indices;
 			if (maybeIndices.has_value()) {
 				indices = std::move(maybeIndices.value());
+				for (u16 index : indices) {
+					if (index >= vertices->size())
+						throw std::runtime_error("index out of bounds");
+				}
 			} else {
 				// Non-indexed geometry
 				indices = std::vector<u16>(vertices->size());
