@@ -96,7 +96,11 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 
 	MeshExtractor parser(std::move(model.value()));
 	SMesh* baseMesh(new SMesh {});
-	loadPrimitives(parser, baseMesh);
+	try {
+		loadPrimitives(parser, baseMesh);
+	} catch (std::runtime_error &e) {
+		return nullptr;
+	}
 
 	SAnimatedMesh* animatedMesh(new SAnimatedMesh {});
 	animatedMesh->addMesh(baseMesh);
@@ -117,10 +121,26 @@ void CGLTFMeshFileLoader::loadPrimitives(
 {
 	for (std::size_t i = 0; i < parser.getMeshCount(); ++i) {
 		for (std::size_t j = 0; j < parser.getPrimitiveCount(i); ++j) {
-			auto indices = parser.getIndices(i, j);
 			auto vertices = parser.getVertices(i, j);
 			if (!vertices.has_value())
-				continue;
+				continue; // "When positions are not specified, client implementations SHOULD skip primitive’s rendering"
+
+			// Excludes the max value for consistency.
+			if (vertices->size() >= std::numeric_limits<u16>::max())
+				throw std::runtime_error("too many vertices");
+			
+			auto maybeIndices = parser.getIndices(i, j);
+			std::vector<u16> indices;
+			if (maybeIndices.has_value()) {
+				indices = std::move(maybeIndices.value());
+			} else {
+				// Non-indexed geometry
+				indices = std::vector<u16>(vertices->size());
+				for (u16 i = 0; i < vertices->size(); i++) {
+					indices[i] = i;
+				}
+			}
+
 			SMeshBuffer* meshbuf(new SMeshBuffer {});
 			meshbuf->append(vertices->data(), vertices->size(),
 				indices.data(), indices.size());
@@ -145,12 +165,13 @@ CGLTFMeshFileLoader::MeshExtractor::MeshExtractor(
 /**
  * Extracts GLTF mesh indices into the irrlicht model.
 */
-std::vector<u16> CGLTFMeshFileLoader::MeshExtractor::getIndices(
+std::optional<std::vector<u16>> CGLTFMeshFileLoader::MeshExtractor::getIndices(
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
 {
-	// FIXME this need not exist. What do we do if it doesn't?
 	const auto accessorIdx = getIndicesAccessorIdx(meshIdx, primitiveIdx);
+	if (!accessorIdx.has_value())
+		return std::nullopt; // non-indexed geometry
 	const auto &accessor = m_model.accessors->at(accessorIdx.value());
 	
 	const auto& buf = getBuffer(accessorIdx.value());
