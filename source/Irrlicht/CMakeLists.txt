@@ -297,17 +297,6 @@ get_property(tiniergltf_INCLUDE_DIRS
 	TARGET tiniergltf
 	PROPERTY INTERFACE_INCLUDE_DIRECTORIES
 )
-get_property(tiniergltf_COMPILE_DEFS
-	TARGET tiniergltf
-	PROPERTY INTERFACE_COMPILE_DEFINITIONS
-)
-if(CMAKE_VERSION VERSION_LESS 3.12)
-	foreach(TINIERGLTF_DEF ${tiniergltf_COMPILE_DEFS})
-		add_definitions("-D${TINIERGLTF_DEF}")
-	endforeach(TINIERGLTF_DEF)
-else()
-	add_compile_definitions(${tiniergltf_COMPILE_DEFS})
-endif()
 
 set(link_includes
 	"${PROJECT_SOURCE_DIR}/include"
