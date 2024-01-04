@@ -25,7 +25,7 @@ namespace scene
 class CGLTFMeshFileLoader : public IMeshLoader
 {
 public:
-	CGLTFMeshFileLoader();
+	CGLTFMeshFileLoader() noexcept;
 
 	bool isALoadableFileExtension(const io::path& filename) const override;
 
@@ -52,7 +52,9 @@ private:
 	public:
 		using vertex_t = video::S3DVertex;
 
-		MeshExtractor(const tiniergltf::GlTF& model);
+		MeshExtractor(const tiniergltf::GlTF& model) noexcept;
+
+		MeshExtractor(const tiniergltf::GlTF&& model) noexcept;
 
 		/* Gets indices for the given mesh/primitive.
 		 *

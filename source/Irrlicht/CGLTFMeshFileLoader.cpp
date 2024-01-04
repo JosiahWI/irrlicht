@@ -62,7 +62,7 @@ unsigned char CGLTFMeshFileLoader::BufferOffset::at(
 	return m_buf.at(m_offset + fromOffset);
 }
 
-CGLTFMeshFileLoader::CGLTFMeshFileLoader()
+CGLTFMeshFileLoader::CGLTFMeshFileLoader() noexcept
 {
 }
 
@@ -133,7 +133,13 @@ void CGLTFMeshFileLoader::loadPrimitives(
 }
 
 CGLTFMeshFileLoader::MeshExtractor::MeshExtractor(
-		const tiniergltf::GlTF& model)
+		const tiniergltf::GlTF& model) noexcept
+	: m_model(model)
+{
+}
+
+CGLTFMeshFileLoader::MeshExtractor::MeshExtractor(
+		const tiniergltf::GlTF&& model) noexcept
 	: m_model(model)
 {
 }
