@@ -152,16 +152,41 @@ std::vector<u16> CGLTFMeshFileLoader::MeshExtractor::getIndices(
 {
 	// FIXME this need not exist. What do we do if it doesn't?
 	const auto accessorIdx = getIndicesAccessorIdx(meshIdx, primitiveIdx);
+	const auto &accessor = m_model.accessors->at(accessorIdx.value());
 	
 	const auto& buf = getBuffer(accessorIdx.value());
 
-	// FIXME check accessor type (which could also be u8 or u32).
 	std::vector<u16> indices{};
 	const auto count = getElemCount(accessorIdx.value());
 	for (std::size_t i = 0; i < count; ++i) {
-		std::size_t elemIdx = count - i - 1;
-		indices.push_back(readPrimitive<u16>(
-			BufferOffset(buf, elemIdx * sizeof(u16))));
+		std::size_t elemIdx = count - i - 1; // reverse index order
+		u16 index;
+		// Note: glTF forbids the max value for each component type.
+		switch (accessor.componentType) {
+			case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE: {
+				index = readPrimitive<u8>(BufferOffset(buf, elemIdx * sizeof(u8)));
+				if (index == std::numeric_limits<u8>::max())
+					throw std::runtime_error("invalid index");
+				break;
+			}
+			case tiniergltf::Accessor::ComponentType::UNSIGNED_SHORT: {
+				index = readPrimitive<u16>(BufferOffset(buf, elemIdx * sizeof(u16)));
+				if (index == std::numeric_limits<u16>::max())
+					throw std::runtime_error("invalid index");
+				break;
+			}
+			case tiniergltf::Accessor::ComponentType::UNSIGNED_INT: {
+				u32 indexWide = readPrimitive<u32>(BufferOffset(buf, elemIdx * sizeof(u32)));
+				// Use >= here for consistency.
+				if (indexWide >= std::numeric_limits<u16>::max())
+					throw std::runtime_error("index too large (>= 65536)");
+				index = (u16) indexWide;
+				break;
+			}
+			default:
+				throw std::runtime_error("invalid index component type");
+		}
+		indices.push_back(index);
 	}
 
 	return indices;
