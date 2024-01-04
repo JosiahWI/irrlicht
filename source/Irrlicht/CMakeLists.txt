@@ -331,7 +331,7 @@ set(link_libs
 	"${ZLIB_LIBRARY}"
 	"${JPEG_LIBRARY}"
 	"${PNG_LIBRARY}"
-	tiniergltf
+	tiniergltf::tiniergltf
 	"$<$<BOOL:${USE_SDL2}>:${SDL2_LIBRARIES}>"
 
 	${OPENGL_LIBRARIES}
