@@ -7,6 +7,7 @@
 #include "irrMath.h"
 
 #include <functional>
+#include <ostream>
 
 namespace irr
 {
@@ -53,6 +54,8 @@ namespace core
 		vector3d<T>& operator/=(const vector3d<T>& other) { X/=other.X; Y/=other.Y; Z/=other.Z; return *this; }
 		vector3d<T> operator/(const T v) const { return vector3d<T>(X/v, Y/v, Z/v); }
 		vector3d<T>& operator/=(const T v) { X/=v; Y/=v; Z/=v; return *this; }
+
+		std::ostream& operator<<(std::ostream &os) { return os << "(" << X << ", " << Y << ", " << Z << ")"; }
 
 		T& operator [](u32 index)
 		{

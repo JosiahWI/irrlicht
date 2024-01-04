@@ -22,3 +22,4 @@ scripts/glext.h
 
 # vscode cmake plugin
 build/*
+.cache

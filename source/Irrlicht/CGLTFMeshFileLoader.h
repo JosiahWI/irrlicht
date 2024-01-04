@@ -1,13 +1,13 @@
 #ifndef __C_GLTF_MESH_FILE_LOADER_INCLUDED__
 #define __C_GLTF_MESH_FILE_LOADER_INCLUDED__
 
+#include "CSkinnedMesh.h"
 #include "IAnimatedMesh.h"
 #include "IMeshLoader.h"
 #include "IReadFile.h"
 #include "irrTypes.h"
 #include "path.h"
 #include "S3DVertex.h"
-#include "SMesh.h"
 #include "vector2d.h"
 #include "vector3d.h"
 
@@ -127,7 +127,7 @@ private:
 				const std::size_t primitiveIdx) const;
 	};
 
-	void loadPrimitives(const MeshExtractor& parser, SMesh* mesh);
+	void loadPrimitives(const MeshExtractor& parser, CSkinnedMesh* mesh);
 
 	std::optional<tiniergltf::GlTF> tryParseGLTF(io::IReadFile* file);
 };

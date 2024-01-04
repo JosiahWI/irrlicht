@@ -8,6 +8,7 @@
 #include "dimension2d.h"
 
 #include <functional>
+#include <ostream>
 
 namespace irr
 {
@@ -60,6 +61,8 @@ public:
 	vector2d<T>& operator/=(const vector2d<T>& other) { X/=other.X; Y/=other.Y; return *this; }
 	vector2d<T> operator/(const T v) const { return vector2d<T>(X / v, Y / v); }
 	vector2d<T>& operator/=(const T v) { X/=v; Y/=v; return *this; }
+
+	std::ostream& operator<<(std::ostream &os) { return os << "(" << X << ", " << Y << ")"; }
 
 	T& operator [](u32 index)
 	{
