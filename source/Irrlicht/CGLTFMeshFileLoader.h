@@ -63,7 +63,7 @@ private:
 		std::vector<u16> getIndices(const std::size_t meshIdx,
 				const std::size_t primitiveIdx) const;
 
-		std::vector<vertex_t> getVertices(std::size_t meshIdx,
+		std::optional<std::vector<vertex_t>> getVertices(std::size_t meshIdx,
 				const std::size_t primitiveIdx) const;
 
 		std::size_t getMeshCount() const;
@@ -113,7 +113,7 @@ private:
 		std::optional<std::size_t> getIndicesAccessorIdx(const std::size_t meshIdx,
 				const std::size_t primitiveIdx) const;
 
-		std::size_t getPositionAccessorIdx(const std::size_t meshIdx,
+		std::optional<std::size_t> getPositionAccessorIdx(const std::size_t meshIdx,
 				const std::size_t primitiveIdx) const;
 
 		/* Get the accessor id of the normals of a primitive.
