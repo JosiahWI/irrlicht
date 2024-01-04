@@ -99,6 +99,7 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 	try {
 		loadPrimitives(parser, baseMesh);
 	} catch (std::runtime_error &e) {
+		baseMesh->drop();
 		return nullptr;
 	}
 
