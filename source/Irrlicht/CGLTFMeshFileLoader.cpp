@@ -2,22 +2,20 @@
 #include "CMeshBuffer.h"
 #include "coreutil.h"
 #include "IAnimatedMesh.h"
-#include "ILogger.h"
 #include "IReadFile.h"
 #include "irrTypes.h"
-#include "os.h"
 #include "path.h"
 #include "S3DVertex.h"
 #include "SAnimatedMesh.h"
-#include "SColor.h"
 #include "SMesh.h"
+#include "tiniergltf.hpp"
 #include "vector3d.h"
 #include <cstddef>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
-#include <string>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -121,9 +119,10 @@ void CGLTFMeshFileLoader::loadPrimitives(
 		for (std::size_t j = 0; j < parser.getPrimitiveCount(i); ++j) {
 			auto indices = parser.getIndices(i, j);
 			auto vertices = parser.getVertices(i, j);
-
+			if (!vertices.has_value())
+				continue;
 			SMeshBuffer* meshbuf(new SMeshBuffer {});
-			meshbuf->append(vertices.data(), vertices.size(),
+			meshbuf->append(vertices->data(), vertices->size(),
 				indices.data(), indices.size());
 			mesh->addMeshBuffer(meshbuf);
 			meshbuf->drop();
@@ -195,15 +194,20 @@ std::vector<u16> CGLTFMeshFileLoader::MeshExtractor::getIndices(
 /**
  * Create a vector of video::S3DVertex (model data) from a mesh & primitive index.
 */
-std::vector<video::S3DVertex> CGLTFMeshFileLoader::MeshExtractor::getVertices(
+std::optional<std::vector<video::S3DVertex>> CGLTFMeshFileLoader::MeshExtractor::getVertices(
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
 {
 	const auto positionAccessorIdx = getPositionAccessorIdx(
 			meshIdx, primitiveIdx);
+	if (!positionAccessorIdx.has_value()) {
+		// "When positions are not specified, client implementations SHOULD skip primitive's rendering"
+		return std::nullopt;
+	}
+
 	std::vector<vertex_t> vertices{};
-	vertices.resize(getElemCount(positionAccessorIdx));
-	copyPositions(positionAccessorIdx, vertices);
+	vertices.resize(getElemCount(*positionAccessorIdx));
+	copyPositions(*positionAccessorIdx, vertices);
 
 	const auto normalAccessorIdx = getNormalAccessorIdx(
 			meshIdx, primitiveIdx);
@@ -440,16 +444,12 @@ std::optional<std::size_t> CGLTFMeshFileLoader::MeshExtractor::getIndicesAccesso
  * The index of the accessor that contains the POSITIONs.
  * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#meshes-overview
  * Type: VEC3 (Float)
- * ! Required: YES (Appears so, needs another pair of eyes to research.)
- * Second pair of eyes says: "When positions are not specified, client implementations SHOULD skip primitive’s rendering"
 */
-std::size_t CGLTFMeshFileLoader::MeshExtractor::getPositionAccessorIdx(
+std::optional<std::size_t> CGLTFMeshFileLoader::MeshExtractor::getPositionAccessorIdx(
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
 {
-	// FIXME position-less primitives should be skipped.
-	return m_model.meshes->at(meshIdx).primitives[primitiveIdx]
-		.attributes.position.value();
+	return m_model.meshes->at(meshIdx).primitives[primitiveIdx].attributes.position;
 }
 
 /**
