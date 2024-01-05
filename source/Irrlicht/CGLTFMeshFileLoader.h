@@ -70,6 +70,8 @@ private:
 
 		std::size_t getPrimitiveCount(const std::size_t meshIdx) const;
 
+		void loadNodes(CSkinnedMesh* mesh) const;
+
 	private:
 		tiniergltf::GlTF m_model;
 
@@ -96,12 +98,6 @@ private:
 		void copyTCoords(const std::size_t accessorIdx,
 				std::vector<vertex_t>& vertices) const;
 
-		/* Get the scale factor from the glTF mesh information.
-		 *
-		 * Returns vec3(1.0, 1.0, 1.0) if no scale factor is present.
-		 */
-		core::vector3df getScale() const;
-
 		std::size_t getElemCount(const std::size_t accessorIdx) const;
 
 		std::size_t getByteStride(const std::size_t accessorIdx) const;
@@ -125,9 +121,17 @@ private:
 		 */
 		std::optional<std::size_t> getTCoordAccessorIdx(const std::size_t meshIdx,
 				const std::size_t primitiveIdx) const;
-	};
+		
+		void loadMesh(
+			std::size_t meshIdx,
+			CSkinnedMesh *mesh,
+			CSkinnedMesh::SJoint *parentJoint) const;
 
-	void loadPrimitives(const MeshExtractor& parser, CSkinnedMesh* mesh);
+		void loadNode(
+			const std::size_t nodeIdx,
+			CSkinnedMesh* mesh,
+			CSkinnedMesh::SJoint *parentJoint) const;
+	};
 
 	std::optional<tiniergltf::GlTF> tryParseGLTF(io::IReadFile* file);
 };
