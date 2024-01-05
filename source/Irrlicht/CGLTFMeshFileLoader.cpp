@@ -4,10 +4,13 @@
 #include "IAnimatedMesh.h"
 #include "IReadFile.h"
 #include "irrTypes.h"
+#include "matrix4.h"
 #include "path.h"
 #include "S3DVertex.h"
+#include "quaternion.h"
 #include "tiniergltf.hpp"
 #include "vector3d.h"
+#include <array>
 #include <cstddef>
 #include <cstring>
 #include <limits>
@@ -95,7 +98,7 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 	MeshExtractor parser(std::move(model.value()));
 	CSkinnedMesh *mesh = new CSkinnedMesh();
 	try {
-		loadPrimitives(parser, mesh);
+		parser.loadNodes(mesh);
 	} catch (std::runtime_error &e) {
 		mesh->drop();
 		return nullptr;
@@ -109,39 +112,131 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
  * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#meshes
  * If material is undefined, then a default material MUST be used.
 */
-void CGLTFMeshFileLoader::loadPrimitives(
-		const MeshExtractor& parser,
-		CSkinnedMesh* mesh)
+void CGLTFMeshFileLoader::MeshExtractor::loadMesh(
+		const std::size_t meshIdx,
+		CSkinnedMesh *mesh,
+		CSkinnedMesh::SJoint *parent) const
 {
-	for (std::size_t i = 0; i < parser.getMeshCount(); ++i) {
-		for (std::size_t j = 0; j < parser.getPrimitiveCount(i); ++j) {
-			auto vertices = parser.getVertices(i, j);
-			if (!vertices.has_value())
-				continue; // "When positions are not specified, client implementations SHOULD skip primitive’s rendering"
+	for (std::size_t j = 0; j < getPrimitiveCount(meshIdx); ++j) {
+		auto vertices = getVertices(meshIdx, j);
+		if (!vertices.has_value())
+			continue; // "When positions are not specified, client implementations SHOULD skip primitive’s rendering"
 
-			// Excludes the max value for consistency.
-			if (vertices->size() >= std::numeric_limits<u16>::max())
-				throw std::runtime_error("too many vertices");
-			
-			auto maybeIndices = parser.getIndices(i, j);
-			std::vector<u16> indices;
-			if (maybeIndices.has_value()) {
-				indices = std::move(maybeIndices.value());
-				for (u16 index : indices) {
-					if (index >= vertices->size())
-						throw std::runtime_error("index out of bounds");
-				}
-			} else {
-				// Non-indexed geometry
-				indices = std::vector<u16>(vertices->size());
-				for (u16 i = 0; i < vertices->size(); i++) {
-					indices[i] = i;
-				}
+		// Excludes the max value for consistency.
+		if (vertices->size() >= std::numeric_limits<u16>::max())
+			throw std::runtime_error("too many vertices");
+
+		// Apply the global transform along the parent chain.
+		for (auto &vertex : *vertices) {
+			parent->GlobalMatrix.transformVect(vertex.Pos);
+			// Apply scaling, rotation and translation (in that order) to the normal.
+			parent->GlobalMatrix.transformVect(vertex.Normal);
+			// Undo the translation, leaving us with scaling and rotation.
+			vertex.Normal -= parent->GlobalMatrix.getTranslation();
+			// Renormalize (length might have been affected by scaling).
+			vertex.Normal.normalize();
+		}
+		
+		auto maybeIndices = getIndices(meshIdx, j);
+		std::vector<u16> indices;
+		if (maybeIndices.has_value()) {
+			indices = std::move(maybeIndices.value());
+			for (u16 index : indices) {
+				if (index >= vertices->size())
+					throw std::runtime_error("index out of bounds");
 			}
+		} else {
+			// Non-indexed geometry
+			indices = std::vector<u16>(vertices->size());
+			for (u16 i = 0; i < vertices->size(); i++) {
+				indices[i] = i;
+			}
+		}
 
-			auto *meshbuf = mesh->addMeshBuffer();
-			meshbuf->append(vertices->data(), vertices->size(),
-				indices.data(), indices.size());
+		auto *meshbuf = mesh->addMeshBuffer();
+		meshbuf->append(vertices->data(), vertices->size(),
+			indices.data(), indices.size());
+	}
+}
+
+// Base transformation between left & right handed coordinate systems.
+// This just inverts the Z axis.
+static core::matrix4 leftToRight = core::matrix4(
+	1, 0, 0, 0,
+	0, 1, 0, 0,
+	0, 0, -1, 0,
+	0, 0, 0, 1
+);
+static core::matrix4 rightToLeft = leftToRight;
+
+static core::matrix4 loadTransform(std::optional<std::variant<tiniergltf::Node::Matrix, tiniergltf::Node::TRS>> transform) {
+	if (!transform.has_value()) {
+		return core::matrix4();
+	}
+	core::matrix4 mat;
+	if (std::holds_alternative<tiniergltf::Node::Matrix>(*transform)) {
+		const auto &m = std::get<tiniergltf::Node::Matrix>(*transform);
+		// Note: Under the hood, this casts these doubles to floats.
+		mat = core::matrix4(
+			m[0], m[1], m[2], m[3],
+			m[4], m[5], m[6], m[7],
+			m[8], m[9], m[10], m[11],
+			m[12], m[13], m[14], m[15]);
+		// glTF uses column-major order, Irrlicht uses row-major order.
+		mat = mat.getTransposed();
+	} else {
+		const auto &trs = std::get<tiniergltf::Node::TRS>(*transform);
+		const auto &trans = trs.translation;
+		const auto &rot = trs.rotation;
+		const auto &scale = trs.scale;
+		core::matrix4 transMat;
+		transMat.setTranslation(core::vector3df(trans[0], trans[1], trans[2]));
+		core::matrix4 rotMat = core::quaternion(rot[0], rot[1], rot[2], rot[3]).getMatrix();
+		core::matrix4 scaleMat;
+		scaleMat.setScale(core::vector3df(scale[0], scale[1], scale[2]));
+		mat = transMat * rotMat * scaleMat;
+	}
+	return rightToLeft * mat * leftToRight;
+}
+
+void CGLTFMeshFileLoader::MeshExtractor::loadNode(
+		const std::size_t nodeIdx,
+		CSkinnedMesh* mesh,
+		CSkinnedMesh::SJoint *parent) const
+{
+	const auto &node = m_model.nodes->at(nodeIdx);
+	auto *joint = mesh->addJoint(parent);
+	const core::matrix4 transform = loadTransform(node.transform);
+	joint->LocalMatrix = transform;
+	joint->GlobalMatrix = parent ? parent->GlobalMatrix * joint->LocalMatrix : joint->LocalMatrix;
+	if (node.name.has_value()) {
+		joint->Name = node.name->c_str();
+	}
+	if (node.mesh.has_value()) {
+		loadMesh(*node.mesh, mesh, joint);
+	}
+	if (node.children.has_value()) {
+		for (const auto &child : *node.children) {
+			loadNode(child, mesh, joint);
+		}
+	}
+}
+
+void CGLTFMeshFileLoader::MeshExtractor::loadNodes(CSkinnedMesh* mesh) const
+{
+	std::vector<bool> isChild(m_model.nodes->size());
+	for (const auto &node : *m_model.nodes) {
+		if (!node.children.has_value())
+			continue;
+		for (const auto &child : *node.children) {
+			isChild[child] = true;
+		}
+	}
+	// Load all nodes that aren't children.
+	// Children will be loaded by their parent nodes.
+	for (std::size_t i = 0; i < m_model.nodes->size(); ++i) {
+		if (!isChild[i]) {
+			loadNode(i, mesh, nullptr);
 		}
 	}
 }
@@ -292,6 +387,7 @@ core::vector2df CGLTFMeshFileLoader::MeshExtractor::readVec2DF(
 
 /**
  * Read a vector3df from a buffer at an offset.
+ * Also does right-to-left-handed coordinate system conversion (inverts Z axis).
  * @return vec3 core::Vector3df
 */
 core::vector3df CGLTFMeshFileLoader::MeshExtractor::readVec3DF(
@@ -299,9 +395,9 @@ core::vector3df CGLTFMeshFileLoader::MeshExtractor::readVec3DF(
 		const core::vector3df scale = {1.0f,1.0f,1.0f})
 {
 	return core::vector3df(
-		scale.X * readPrimitive<float>(readFrom),
-		scale.Y * readPrimitive<float>(BufferOffset(readFrom, sizeof(float))),
-		-scale.Z * readPrimitive<float>(BufferOffset(readFrom, 2 *
+		readPrimitive<float>(readFrom),
+		readPrimitive<float>(BufferOffset(readFrom, sizeof(float))),
+		-readPrimitive<float>(BufferOffset(readFrom, 2 *
 		sizeof(float))));
 }
 
@@ -319,8 +415,7 @@ void CGLTFMeshFileLoader::MeshExtractor::copyPositions(
 	const auto byteStride = getByteStride(accessorIdx);
 
 	for (std::size_t i = 0; i < count; i++) {
-		const auto v = readVec3DF(BufferOffset(buffer,
-			(byteStride * i)), getScale());
+		const auto v = readVec3DF(BufferOffset(buffer, byteStride * i));
 		vertices[i].Pos = v;
 	}
 }
@@ -360,29 +455,6 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 			2 * sizeof(float) * i));
 		vertices[i].TCoords = t;
 	}
-}
-
-/**
- * Gets the scale of a model's node via a reference Vector3df.
- * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#reference-node
- * Type: number[3] (tinygltf: vector<double>)
- * Required: NO
- * @returns: core::vector2df
-*/
-core::vector3df CGLTFMeshFileLoader::MeshExtractor::getScale() const
-{
-	core::vector3df buffer{1.0f,1.0f,1.0f};
-	// FIXME this just checks the first node
-	const auto &node = m_model.nodes->at(0);
-	// FIXME this does not take the matrix into account
-	// (fix: properly map glTF -> Irrlicht node hierarchy)
-	if (std::holds_alternative<tiniergltf::Node::TRS>(node.transform)) {
-		const auto &trs = std::get<tiniergltf::Node::TRS>(node.transform);
-		buffer.X = static_cast<float>(trs.scale[0]);
-		buffer.Y = static_cast<float>(trs.scale[1]);
-		buffer.Z = static_cast<float>(trs.scale[2]);
-	}
-	return buffer;
 }
 
 /**
