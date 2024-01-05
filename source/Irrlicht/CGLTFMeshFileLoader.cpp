@@ -98,7 +98,7 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 	MeshExtractor parser(std::move(model.value()));
 	CSkinnedMesh *mesh = new CSkinnedMesh();
 	try {
-		parser.loadNodes(mesh);
+		parser.load(mesh);
 	} catch (std::runtime_error &e) {
 		mesh->drop();
 		return nullptr;
@@ -112,51 +112,110 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
  * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#meshes
  * If material is undefined, then a default material MUST be used.
 */
-void CGLTFMeshFileLoader::MeshExtractor::loadMesh(
+void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
 		const std::size_t meshIdx,
 		CSkinnedMesh *mesh,
-		CSkinnedMesh::SJoint *parent) const
+		CSkinnedMesh::SJoint *parent)
 {
-	for (std::size_t j = 0; j < getPrimitiveCount(meshIdx); ++j) {
-		auto vertices = getVertices(meshIdx, j);
-		if (!vertices.has_value())
-			continue; // "When positions are not specified, client implementations SHOULD skip primitive’s rendering"
+	m_mesh_loaders.push_back([=] {
+		for (std::size_t j = 0; j < getPrimitiveCount(meshIdx); ++j) {
+			auto vertices = getVertices(meshIdx, j);
+			if (!vertices.has_value())
+				continue; // "When positions are not specified, client implementations SHOULD skip primitive’s rendering"
 
-		// Excludes the max value for consistency.
-		if (vertices->size() >= std::numeric_limits<u16>::max())
-			throw std::runtime_error("too many vertices");
+			// Excludes the max value for consistency.
+			if (vertices->size() >= std::numeric_limits<u16>::max())
+				throw std::runtime_error("too many vertices");
 
-		// Apply the global transform along the parent chain.
-		for (auto &vertex : *vertices) {
-			parent->GlobalMatrix.transformVect(vertex.Pos);
-			// Apply scaling, rotation and translation (in that order) to the normal.
-			parent->GlobalMatrix.transformVect(vertex.Normal);
-			// Undo the translation, leaving us with scaling and rotation.
-			vertex.Normal -= parent->GlobalMatrix.getTranslation();
-			// Renormalize (length might have been affected by scaling).
-			vertex.Normal.normalize();
-		}
-		
-		auto maybeIndices = getIndices(meshIdx, j);
-		std::vector<u16> indices;
-		if (maybeIndices.has_value()) {
-			indices = std::move(maybeIndices.value());
-			for (u16 index : indices) {
-				if (index >= vertices->size())
-					throw std::runtime_error("index out of bounds");
+			// Apply the global transform along the parent chain.
+			for (auto &vertex : *vertices) {
+				parent->GlobalMatrix.transformVect(vertex.Pos);
+				// Apply scaling, rotation and translation (in that order) to the normal.
+				parent->GlobalMatrix.transformVect(vertex.Normal);
+				// Undo the translation, leaving us with scaling and rotation.
+				vertex.Normal -= parent->GlobalMatrix.getTranslation();
+				// Renormalize (length might have been affected by scaling).
+				vertex.Normal.normalize();
 			}
-		} else {
-			// Non-indexed geometry
-			indices = std::vector<u16>(vertices->size());
-			for (u16 i = 0; i < vertices->size(); i++) {
-				indices[i] = i;
+			
+			auto maybeIndices = getIndices(meshIdx, j);
+			std::vector<u16> indices;
+			if (maybeIndices.has_value()) {
+				indices = std::move(maybeIndices.value());
+				for (u16 index : indices) {
+					if (index >= vertices->size())
+						throw std::runtime_error("index out of bounds");
+				}
+			} else {
+				// Non-indexed geometry
+				indices = std::vector<u16>(vertices->size());
+				for (u16 i = 0; i < vertices->size(); i++) {
+					indices[i] = i;
+				}
+			}
+
+			auto *meshbuf = mesh->addMeshBuffer();
+			meshbuf->append(vertices->data(), vertices->size(),
+				indices.data(), indices.size());
+			
+			const auto &attrs = m_model.meshes->at(meshIdx).primitives.at(j).attributes;
+			const auto &joints = attrs.joints;
+			if (!joints.has_value())
+				continue;
+			const auto &weights = attrs.weights;
+			const auto buffer_id = mesh->getMeshBufferCount() - 1;
+			for (std::size_t set = 0; set < joints->size(); ++set) {
+				const auto jointAccIdx = joints->at(set);
+				const auto &jointAccessor = m_model.accessors->at(jointAccIdx);
+				const auto jointBuffer = getBuffer(jointAccIdx);
+				const auto jointBufByteStride = getByteStride(jointAccIdx);
+
+				const auto weightAccIdx = weights->at(set);
+				const auto &weightAccessor = m_model.accessors->at(weightAccIdx);
+				const auto weightBuffer = getBuffer(weightAccIdx);
+				const auto weightBufByteStride = getByteStride(weightAccIdx);
+
+
+				if (jointAccessor.type != tiniergltf::Accessor::Type::VEC4 || weightAccessor.type != tiniergltf::Accessor::Type::VEC4)
+					throw std::runtime_error("invalid accessor type");
+				for (std::size_t v = 0; v < vertices->size(); ++v) {
+					// 4 joints per set
+					for (u8 in_set = 0; in_set < 4; ++in_set) {
+						u16 jointIdx;
+						const auto jointOff = BufferOffset(jointBuffer,
+								4 * v * jointBufByteStride + in_set * jointAccessor.elementSize());
+						switch (jointAccessor.componentType) {
+							case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE:
+								jointIdx = readPrimitive<u8>(jointOff);
+							case tiniergltf::Accessor::ComponentType::UNSIGNED_SHORT:
+								jointIdx = readPrimitive<u16>(jointOff);
+							default:
+								throw std::runtime_error("invalid component type");
+						}
+
+						f32 strength;
+						const auto weightOff = BufferOffset(weightBuffer,
+								4 * v * weightBufByteStride + in_set * weightAccessor.elementSize());
+						switch (weightAccessor.componentType) {
+							case tiniergltf::Accessor::ComponentType::FLOAT:
+								strength = readPrimitive<f32>(weightOff);
+							// TODO normalized unsigned support
+							default:
+								throw std::runtime_error("invalid component type");
+						}
+
+						if (strength == 0)
+							continue;
+
+						CSkinnedMesh::SWeight *weight = mesh->addWeight(m_loaded_nodes.at(jointIdx));
+						weight->buffer_id = buffer_id;
+						weight->vertex_id = v;
+						weight->strength = strength;
+					}
+				}
 			}
 		}
-
-		auto *meshbuf = mesh->addMeshBuffer();
-		meshbuf->append(vertices->data(), vertices->size(),
-			indices.data(), indices.size());
-	}
+	});
 }
 
 // Base transformation between left & right handed coordinate systems.
@@ -202,7 +261,7 @@ static core::matrix4 loadTransform(std::optional<std::variant<tiniergltf::Node::
 void CGLTFMeshFileLoader::MeshExtractor::loadNode(
 		const std::size_t nodeIdx,
 		CSkinnedMesh* mesh,
-		CSkinnedMesh::SJoint *parent) const
+		CSkinnedMesh::SJoint *parent)
 {
 	const auto &node = m_model.nodes->at(nodeIdx);
 	auto *joint = mesh->addJoint(parent);
@@ -212,8 +271,9 @@ void CGLTFMeshFileLoader::MeshExtractor::loadNode(
 	if (node.name.has_value()) {
 		joint->Name = node.name->c_str();
 	}
+	m_loaded_nodes[nodeIdx] = joint;
 	if (node.mesh.has_value()) {
-		loadMesh(*node.mesh, mesh, joint);
+		deferAddMesh(*node.mesh, mesh, joint);
 	}
 	if (node.children.has_value()) {
 		for (const auto &child : *node.children) {
@@ -222,8 +282,10 @@ void CGLTFMeshFileLoader::MeshExtractor::loadNode(
 	}
 }
 
-void CGLTFMeshFileLoader::MeshExtractor::loadNodes(CSkinnedMesh* mesh) const
+void CGLTFMeshFileLoader::MeshExtractor::loadNodes(CSkinnedMesh* mesh)
 {
+	m_loaded_nodes = std::vector<CSkinnedMesh::SJoint*>(m_model.nodes->size());
+
 	std::vector<bool> isChild(m_model.nodes->size());
 	for (const auto &node : *m_model.nodes) {
 		if (!node.children.has_value())
@@ -239,6 +301,116 @@ void CGLTFMeshFileLoader::MeshExtractor::loadNodes(CSkinnedMesh* mesh) const
 			loadNode(i, mesh, nullptr);
 		}
 	}
+}
+
+void CGLTFMeshFileLoader::MeshExtractor::loadSkins(CSkinnedMesh* mesh)
+{
+	if (!m_model.skins.has_value()) return;
+	// TODO there's quite some info we don't use and I don't like that
+	for (const auto &skin : *m_model.skins) {
+		if (!skin.inverseBindMatrices.has_value())
+			continue;
+		const auto accessorIdx = *skin.inverseBindMatrices;
+		const auto &buffer = getBuffer(accessorIdx);
+		const auto count = getElemCount(accessorIdx);
+		if (count < skin.joints.size())
+			throw std::runtime_error("accessor contains too few matrices");
+		const auto byteStride = getByteStride(accessorIdx);
+		for (std::size_t i = 0; i < skin.joints.size(); ++i) {
+			m_loaded_nodes.at(skin.joints[i])->GlobalInversedMatrix =
+					readMatrix4(BufferOffset(buffer, i * byteStride));
+		}
+	}
+}
+
+void CGLTFMeshFileLoader::MeshExtractor::loadAnimation(
+	const std::size_t animIdx, CSkinnedMesh* mesh)
+{
+	const auto &anim = m_model.animations->at(animIdx);
+	for (const auto &channel : anim.channels) {
+
+		const auto &sampler = anim.samplers.at(channel.sampler);
+		if (sampler.interpolation != tiniergltf::AnimationSampler::Interpolation::LINEAR)
+			throw std::runtime_error("unsupported interpolation");
+
+		const auto n_frames = getElemCount(sampler.input);
+		const auto &accessor = m_model.accessors->at(sampler.input);
+		if (accessor.componentType != tiniergltf::Accessor::ComponentType::FLOAT
+				|| accessor.type != tiniergltf::Accessor::Type::SCALAR)
+			throw std::runtime_error("invalid timestamp accessor");
+		const auto &inputBuf = getBuffer(sampler.input);
+		const auto byteStride = getByteStride(sampler.input);
+		const auto &getFrame = [=](const std::size_t i) {
+			return readPrimitive<float>(BufferOffset(inputBuf, byteStride * i));
+		};
+
+		const auto &outAcc = m_model.accessors->at(sampler.output);
+		const auto &outBuf = getBuffer(sampler.output);
+		const auto outByteStride = getByteStride(sampler.output);
+
+		if (!channel.target.node.has_value())
+			throw std::runtime_error("no animated node");
+		const auto &joint = m_loaded_nodes.at(*channel.target.node);
+
+		switch (channel.target.path) {
+			case tiniergltf::AnimationChannelTarget::Path::TRANSLATION: {
+				if (outAcc.componentType != tiniergltf::Accessor::ComponentType::FLOAT
+						|| outAcc.type != tiniergltf::Accessor::Type::VEC3)
+					throw std::runtime_error("invalid translation accessor");
+
+				for (std::size_t i = 0; i < n_frames; ++i) {
+					auto *key = mesh->addPositionKey(joint);
+					key->frame = getFrame(i);
+					key->position = readVec3DF(BufferOffset(outBuf, i * outByteStride));
+				}
+				break;
+			}
+			case tiniergltf::AnimationChannelTarget::Path::ROTATION: {
+				if (outAcc.componentType != tiniergltf::Accessor::ComponentType::FLOAT
+						|| outAcc.type != tiniergltf::Accessor::Type::VEC4)
+					throw std::runtime_error("invalid rotation accessor");
+
+				for (std::size_t i = 0; i < n_frames; ++i) {
+					auto *key = mesh->addRotationKey(joint);
+					key->frame = getFrame(i);
+					key->rotation = readQuaternion(BufferOffset(outBuf, i * outByteStride));
+				}
+				break;
+			}
+			case tiniergltf::AnimationChannelTarget::Path::SCALE: {
+				if (outAcc.componentType != tiniergltf::Accessor::ComponentType::FLOAT
+						|| outAcc.type != tiniergltf::Accessor::Type::VEC3)
+					throw std::runtime_error("invalid scale accessor");
+
+				for (std::size_t i = 0; i < n_frames; ++i) {
+					auto *key = mesh->addScaleKey(joint);
+					key->frame = getFrame(i);
+					key->scale = readVec3DF(BufferOffset(outBuf, i * outByteStride));
+					// HACK undo RHS - LHS conversion; it should not have been applied in the first place.
+					key->scale.Z = -key->scale.Z;
+				}
+				break;
+			}
+			case tiniergltf::AnimationChannelTarget::Path::WEIGHTS:
+				throw std::runtime_error("no support for morph animations");
+		}
+	}
+}
+
+void CGLTFMeshFileLoader::MeshExtractor::load(CSkinnedMesh* mesh)
+{
+	loadNodes(mesh);
+	for (const auto &loadMesh : m_mesh_loaders) {
+		loadMesh();
+	}
+	loadSkins(mesh);
+	// Load the first animation, if there is one.
+	// Minetest does not support multiple animations yet.
+	if (m_model.animations.has_value()) {
+		loadAnimation(0, mesh);
+		mesh->setAnimationSpeed(1);
+	}
+	mesh->finalize();
 }
 
 CGLTFMeshFileLoader::MeshExtractor::MeshExtractor(
@@ -391,14 +563,38 @@ core::vector2df CGLTFMeshFileLoader::MeshExtractor::readVec2DF(
  * @return vec3 core::Vector3df
 */
 core::vector3df CGLTFMeshFileLoader::MeshExtractor::readVec3DF(
-		const BufferOffset& readFrom,
-		const core::vector3df scale = {1.0f,1.0f,1.0f})
+		const BufferOffset& readFrom)
 {
 	return core::vector3df(
 		readPrimitive<float>(readFrom),
 		readPrimitive<float>(BufferOffset(readFrom, sizeof(float))),
 		-readPrimitive<float>(BufferOffset(readFrom, 2 *
 		sizeof(float))));
+}
+
+core::quaternion CGLTFMeshFileLoader::MeshExtractor::readQuaternion(
+		const BufferOffset& readFrom)
+{
+	return core::quaternion(
+		readPrimitive<float>(readFrom),
+		readPrimitive<float>(BufferOffset(readFrom, sizeof(float))),
+		// TODO is this handedness conversion correct (probably not)?
+		-readPrimitive<float>(BufferOffset(readFrom, 2 * sizeof(float))),
+		readPrimitive<float>(BufferOffset(readFrom, 3 * sizeof(float))));
+}
+
+core::matrix4 CGLTFMeshFileLoader::MeshExtractor::readMatrix4(
+		const BufferOffset& readFrom)
+{
+		float M[16];
+		for (u8 i = 0; i < 16; ++i) {
+			M[i] = readPrimitive<float>(BufferOffset(readFrom, i * sizeof(float)));
+		}
+		core::matrix4 mat;
+		mat.setM(M);
+		// glTF uses column-major order, Irrlicht uses row-major order.
+		mat = mat.getTransposed();
+		return leftToRight * mat * rightToLeft;
 }
 
 /**

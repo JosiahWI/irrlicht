@@ -11,6 +11,7 @@
 #include "vector2d.h"
 #include "vector3d.h"
 
+#include <functional>
 #include <tiniergltf.hpp>
 
 #include <cstddef>
@@ -70,10 +71,14 @@ private:
 
 		std::size_t getPrimitiveCount(const std::size_t meshIdx) const;
 
-		void loadNodes(CSkinnedMesh* mesh) const;
+		void load(CSkinnedMesh* mesh);
 
 	private:
 		tiniergltf::GlTF m_model;
+
+		std::vector<std::function<void()>> m_mesh_loaders;
+
+		std::vector<CSkinnedMesh::SJoint*> m_loaded_nodes;
 
 		template <typename T>
 		static T readPrimitive(const BufferOffset& readFrom);
@@ -86,8 +91,13 @@ private:
 		 * Values are returned in Irrlicht coordinates.
 		 */
 		static core::vector3df readVec3DF(
-				const BufferOffset& readFrom,
-				const core::vector3df scale);
+				const BufferOffset& readFrom);
+		
+		static core::matrix4 readMatrix4(
+				const BufferOffset& readFrom);
+		
+		static core::quaternion readQuaternion(
+				const BufferOffset& readFrom);
 
 		void copyPositions(const std::size_t accessorIdx,
 				std::vector<vertex_t>& vertices) const;
@@ -122,15 +132,23 @@ private:
 		std::optional<std::size_t> getTCoordAccessorIdx(const std::size_t meshIdx,
 				const std::size_t primitiveIdx) const;
 		
-		void loadMesh(
-			std::size_t meshIdx,
+		void deferAddMesh(
+			const std::size_t meshIdx,
 			CSkinnedMesh *mesh,
-			CSkinnedMesh::SJoint *parentJoint) const;
+			CSkinnedMesh::SJoint *parentJoint);
 
 		void loadNode(
 			const std::size_t nodeIdx,
 			CSkinnedMesh* mesh,
-			CSkinnedMesh::SJoint *parentJoint) const;
+			CSkinnedMesh::SJoint *parentJoint);
+		
+		void loadNodes(CSkinnedMesh* mesh);
+
+		void loadSkins(CSkinnedMesh* mesh);
+
+		void loadAnimation(
+			const std::size_t animIdx,
+			CSkinnedMesh* mesh);
 	};
 
 	std::optional<tiniergltf::GlTF> tryParseGLTF(io::IReadFile* file);
