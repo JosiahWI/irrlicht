@@ -187,8 +187,10 @@ void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
 						switch (jointAccessor.componentType) {
 							case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE:
 								jointIdx = readPrimitive<u8>(jointOff);
+								break;
 							case tiniergltf::Accessor::ComponentType::UNSIGNED_SHORT:
 								jointIdx = readPrimitive<u16>(jointOff);
+								break;
 							default:
 								throw std::runtime_error("invalid component type");
 						}
@@ -199,7 +201,15 @@ void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
 						switch (weightAccessor.componentType) {
 							case tiniergltf::Accessor::ComponentType::FLOAT:
 								strength = readPrimitive<f32>(weightOff);
-							// TODO normalized unsigned support
+								break;
+							case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE:
+								strength = (f32) readPrimitive<u8>(jointOff)
+										/ std::numeric_limits<u8>::max();
+								break;
+							case tiniergltf::Accessor::ComponentType::UNSIGNED_SHORT:
+								strength = (f32) readPrimitive<u16>(jointOff)
+										/ std::numeric_limits<u16>::max();
+								break;
 							default:
 								throw std::runtime_error("invalid component type");
 						}
