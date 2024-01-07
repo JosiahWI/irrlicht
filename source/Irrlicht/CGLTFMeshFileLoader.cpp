@@ -157,34 +157,37 @@ void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
 			auto *meshbuf = mesh->addMeshBuffer();
 			meshbuf->append(vertices->data(), vertices->size(),
 				indices.data(), indices.size());
+			const auto buffer_id = mesh->getMeshBufferCount() - 1;
 			
 			const auto &attrs = m_model.meshes->at(meshIdx).primitives.at(j).attributes;
 			const auto &joints = attrs.joints;
 			if (!joints.has_value())
 				continue;
+
 			const auto &weights = attrs.weights;
-			const auto buffer_id = mesh->getMeshBufferCount() - 1;
 			for (std::size_t set = 0; set < joints->size(); ++set) {
 				const auto jointAccIdx = joints->at(set);
-				const auto &jointAccessor = m_model.accessors->at(jointAccIdx);
-				const auto jointBuffer = getBuffer(jointAccIdx);
+				const auto &jointAcc = m_model.accessors->at(jointAccIdx);
+				const auto &jointBuf = getBuffer(jointAccIdx);
 				const auto jointBufByteStride = getByteStride(jointAccIdx);
 
 				const auto weightAccIdx = weights->at(set);
-				const auto &weightAccessor = m_model.accessors->at(weightAccIdx);
-				const auto weightBuffer = getBuffer(weightAccIdx);
+				const auto &weightAcc = m_model.accessors->at(weightAccIdx);
+				const auto &weightBuf = getBuffer(weightAccIdx);
 				const auto weightBufByteStride = getByteStride(weightAccIdx);
 
 
-				if (jointAccessor.type != tiniergltf::Accessor::Type::VEC4 || weightAccessor.type != tiniergltf::Accessor::Type::VEC4)
+				if (jointAcc.type != tiniergltf::Accessor::Type::VEC4
+						|| weightAcc.type != tiniergltf::Accessor::Type::VEC4)
 					throw std::runtime_error("invalid accessor type");
+
 				for (std::size_t v = 0; v < vertices->size(); ++v) {
 					// 4 joints per set
-					for (u8 in_set = 0; in_set < 4; ++in_set) {
+					for (std::size_t in_set = 0; in_set < 4; ++in_set) {
 						u16 jointIdx;
-						const auto jointOff = BufferOffset(jointBuffer,
-								4 * v * jointBufByteStride + in_set * jointAccessor.elementSize());
-						switch (jointAccessor.componentType) {
+						const auto jointOff = BufferOffset(jointBuf,
+								v * jointBufByteStride + in_set * jointAcc.componentSize());
+						switch (jointAcc.componentType) {
 							case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE:
 								jointIdx = readPrimitive<u8>(jointOff);
 								break;
@@ -196,18 +199,18 @@ void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
 						}
 
 						f32 strength;
-						const auto weightOff = BufferOffset(weightBuffer,
-								4 * v * weightBufByteStride + in_set * weightAccessor.elementSize());
-						switch (weightAccessor.componentType) {
+						const auto weightOff = BufferOffset(weightBuf,
+								v * weightBufByteStride + in_set * weightAcc.componentSize());
+						switch (weightAcc.componentType) {
 							case tiniergltf::Accessor::ComponentType::FLOAT:
 								strength = readPrimitive<f32>(weightOff);
 								break;
 							case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE:
-								strength = (f32) readPrimitive<u8>(jointOff)
+								strength = (f32) readPrimitive<u8>(weightOff)
 										/ std::numeric_limits<u8>::max();
 								break;
 							case tiniergltf::Accessor::ComponentType::UNSIGNED_SHORT:
-								strength = (f32) readPrimitive<u16>(jointOff)
+								strength = (f32) readPrimitive<u16>(weightOff)
 										/ std::numeric_limits<u16>::max();
 								break;
 							default:
