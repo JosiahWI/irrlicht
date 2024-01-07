@@ -268,7 +268,8 @@ static core::matrix4 loadTransform(std::optional<std::variant<tiniergltf::Node::
 		const auto &scale = trs.scale;
 		core::matrix4 transMat;
 		transMat.setTranslation(core::vector3df(trans[0], trans[1], trans[2]));
-		core::matrix4 rotMat = core::quaternion(rot[0], rot[1], rot[2], rot[3]).getMatrix();
+		core::matrix4 rotMat;
+		core::quaternion(rot[0], rot[1], rot[2], rot[3]).getMatrix_transposed(rotMat);
 		core::matrix4 scaleMat;
 		scaleMat.setScale(core::vector3df(scale[0], scale[1], scale[2]));
 		mat = transMat * rotMat * scaleMat;
