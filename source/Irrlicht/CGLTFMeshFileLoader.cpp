@@ -717,7 +717,7 @@ CGLTFMeshFileLoader::BufferOffset CGLTFMeshFileLoader::MeshExtractor::getBuffer(
 	const auto& view = m_model.bufferViews->at(accessor.bufferView.value());
 	const auto& buffer = m_model.buffers->at(view.buffer);
 
-	return BufferOffset(buffer.data, view.byteOffset);
+	return BufferOffset(buffer.data, view.byteOffset + accessor.byteOffset);
 }
 
 /**
