@@ -114,6 +114,7 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 */
 void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
 		const std::size_t meshIdx,
+		const std::optional<std::size_t> skinIdx,
 		CSkinnedMesh *mesh,
 		CSkinnedMesh::SJoint *parent)
 {
@@ -159,6 +160,10 @@ void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
 				indices.data(), indices.size());
 			const auto buffer_id = mesh->getMeshBufferCount() - 1;
 			
+			if (!skinIdx.has_value())
+				continue;
+			const auto &skin = m_model.skins->at(*skinIdx);
+
 			const auto &attrs = m_model.meshes->at(meshIdx).primitives.at(j).attributes;
 			const auto &joints = attrs.joints;
 			if (!joints.has_value())
@@ -220,7 +225,7 @@ void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
 						if (strength == 0)
 							continue;
 
-						CSkinnedMesh::SWeight *weight = mesh->addWeight(m_loaded_nodes.at(jointIdx));
+						CSkinnedMesh::SWeight *weight = mesh->addWeight(m_loaded_nodes.at(skin.joints[jointIdx]));
 						weight->buffer_id = buffer_id;
 						weight->vertex_id = v;
 						weight->strength = strength;
@@ -286,7 +291,7 @@ void CGLTFMeshFileLoader::MeshExtractor::loadNode(
 	}
 	m_loaded_nodes[nodeIdx] = joint;
 	if (node.mesh.has_value()) {
-		deferAddMesh(*node.mesh, mesh, joint);
+		deferAddMesh(*node.mesh, node.skin, mesh, joint);
 	}
 	if (node.children.has_value()) {
 		for (const auto &child : *node.children) {

@@ -134,6 +134,7 @@ private:
 		
 		void deferAddMesh(
 			const std::size_t meshIdx,
+			const std::optional<std::size_t> skinIdx,
 			CSkinnedMesh *mesh,
 			CSkinnedMesh::SJoint *parentJoint);
 
