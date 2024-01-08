@@ -9,6 +9,7 @@
 #include "IBoneSceneNode.h"
 #include "IAnimatedMesh.h"
 #include "SSkinMeshBuffer.h"
+#include <optional>
 
 namespace irr
 {
@@ -167,7 +168,7 @@ namespace scene
 			core::vector3df Animatedscale;
 			core::quaternion Animatedrotation;
 
-			core::matrix4 GlobalInversedMatrix; //the x format pre-calculates this
+			std::optional<core::matrix4> GlobalInversedMatrix; //the x format pre-calculates this
 
 		private:
 			//! Internal members used by CSkinnedMesh

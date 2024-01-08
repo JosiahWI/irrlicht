@@ -7,7 +7,7 @@ else()
 	cmake_policy(VERSION 3.11)
 endif()
 
-set(IRRLICHTMT_REVISION 13)
+set(IRRLICHTMT_REVISION 14)
 
 # workaround: cmake<3.9 requires C language for internal checks
 # https://gitlab.kitware.com/cmake/cmake/-/merge_requests/487

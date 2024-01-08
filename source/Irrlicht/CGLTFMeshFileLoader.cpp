@@ -32,9 +32,37 @@
  * of the vertex indices.
  */
 
+// TODO also reverse winding order based on determinant of global transform
+
+
 namespace irr {
 
 namespace scene {
+
+// Right-to-left handedness conversions
+
+static inline core::vector3df convertVectorHandedness(core::vector3df p) {
+	return core::vector3df(p.X, p.Y, -p.Z);
+}
+
+static inline core::quaternion convertRotationHandedness(core::quaternion q) {
+	return core::quaternion(q.X, q.Y, -q.Z, q.W);
+}
+
+static inline core::matrix4 convertMatrixHandedness(core::matrix4 mat) {
+	// Base transformation between left & right handed coordinate systems.
+	static core::matrix4 invertZ = core::matrix4(
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, -1, 0,
+		0, 0, 0, 1
+	);
+	// Convert from left-handed to right-handed,
+	// then apply mat,
+	// then convert from right-handed to left-handed.
+	// Both conversions just invert Z.
+	return invertZ * mat * invertZ;
+}
 
 CGLTFMeshFileLoader::BufferOffset::BufferOffset(
 		const std::vector<unsigned char>& buf,
@@ -236,45 +264,55 @@ void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
 	});
 }
 
-// Base transformation between left & right handed coordinate systems.
-// This just inverts the Z axis.
-static core::matrix4 leftToRight = core::matrix4(
-	1, 0, 0, 0,
-	0, 1, 0, 0,
-	0, 0, -1, 0,
-	0, 0, 0, 1
-);
-static core::matrix4 rightToLeft = leftToRight;
-
-static core::matrix4 loadTransform(std::optional<std::variant<tiniergltf::Node::Matrix, tiniergltf::Node::TRS>> transform) {
+static core::matrix4 loadTransform(std::optional<std::variant<tiniergltf::Node::Matrix, tiniergltf::Node::TRS>> transform, CSkinnedMesh::SJoint *joint) {
 	if (!transform.has_value()) {
 		return core::matrix4();
 	}
-	core::matrix4 mat;
 	if (std::holds_alternative<tiniergltf::Node::Matrix>(*transform)) {
+		// TODO test this path using glTF sample models
 		const auto &m = std::get<tiniergltf::Node::Matrix>(*transform);
 		// Note: Under the hood, this casts these doubles to floats.
-		mat = core::matrix4(
+		core::matrix4 mat = convertMatrixHandedness(core::matrix4(
 			m[0], m[1], m[2], m[3],
 			m[4], m[5], m[6], m[7],
 			m[8], m[9], m[10], m[11],
-			m[12], m[13], m[14], m[15]);
-		// glTF uses column-major order, Irrlicht uses row-major order.
-		mat = mat.getTransposed();
+			m[12], m[13], m[14], m[15]));
+
+		// Decompose the matrix into translation, scale, and rotation.
+		joint->Animatedposition = mat.getTranslation();
+
+		auto scale = mat.getScale();
+		joint->Animatedscale = scale;
+		core::matrix4 inverseScale;
+		inverseScale.setScale(core::vector3df(
+			scale.X == 0 ? 0 : 1/scale.X,
+			scale.Y == 0 ? 0 : 1/scale.Y,
+			scale.Z == 0 ? 0 : 1/scale.Z
+		));
+
+		core::matrix4 axisNormalizedMat = inverseScale * mat;
+		joint->Animatedrotation = axisNormalizedMat.getRotationDegrees();
+		// Invert the rotation because it is applied using `getMatrix_transposed`,
+		// which again inverts.
+		joint->Animatedrotation.makeInverse();
+		
+		return mat;
 	} else {
 		const auto &trs = std::get<tiniergltf::Node::TRS>(*transform);
 		const auto &trans = trs.translation;
 		const auto &rot = trs.rotation;
 		const auto &scale = trs.scale;
 		core::matrix4 transMat;
-		transMat.setTranslation(core::vector3df(trans[0], trans[1], trans[2]));
+		joint->Animatedposition = core::vector3df(trans[0], trans[1], -trans[2]);
+		transMat.setTranslation(joint->Animatedposition);
 		core::matrix4 rotMat;
-		core::quaternion(rot[0], rot[1], rot[2], rot[3]).getMatrix_transposed(rotMat);
+		joint->Animatedrotation = convertRotationHandedness(core::quaternion(rot[0], rot[1], rot[2], rot[3]));
+		core::quaternion(joint->Animatedrotation).getMatrix_transposed(rotMat);
+		joint->Animatedscale = core::vector3df(scale[0], scale[1], scale[2]);
 		core::matrix4 scaleMat;
-		scaleMat.setScale(core::vector3df(scale[0], scale[1], scale[2]));
-		mat = transMat * rotMat * scaleMat;
+		scaleMat.setScale(joint->Animatedscale);
+		return transMat * rotMat * scaleMat;
 	}
-	return rightToLeft * mat * leftToRight;
 }
 
 void CGLTFMeshFileLoader::MeshExtractor::loadNode(
@@ -284,8 +322,9 @@ void CGLTFMeshFileLoader::MeshExtractor::loadNode(
 {
 	const auto &node = m_model.nodes->at(nodeIdx);
 	auto *joint = mesh->addJoint(parent);
-	const core::matrix4 transform = loadTransform(node.transform);
+	const core::matrix4 transform = loadTransform(node.transform, joint);
 	joint->LocalMatrix = transform;
+	
 	joint->GlobalMatrix = parent ? parent->GlobalMatrix * joint->LocalMatrix : joint->LocalMatrix;
 	if (node.name.has_value()) {
 		joint->Name = node.name->c_str();
@@ -324,8 +363,9 @@ void CGLTFMeshFileLoader::MeshExtractor::loadNodes(CSkinnedMesh* mesh)
 
 void CGLTFMeshFileLoader::MeshExtractor::loadSkins(CSkinnedMesh* mesh)
 {
-	if (!m_model.skins.has_value()) return;
-	// TODO there's quite some info we don't use and I don't like that
+	if (!m_model.skins.has_value())
+		return;
+
 	for (const auto &skin : *m_model.skins) {
 		if (!skin.inverseBindMatrices.has_value())
 			continue;
@@ -369,6 +409,7 @@ void CGLTFMeshFileLoader::MeshExtractor::loadAnimation(
 
 		if (!channel.target.node.has_value())
 			throw std::runtime_error("no animated node");
+
 		const auto &joint = m_loaded_nodes.at(*channel.target.node);
 
 		switch (channel.target.path) {
@@ -380,7 +421,7 @@ void CGLTFMeshFileLoader::MeshExtractor::loadAnimation(
 				for (std::size_t i = 0; i < n_frames; ++i) {
 					auto *key = mesh->addPositionKey(joint);
 					key->frame = getFrame(i);
-					key->position = readVec3DF(BufferOffset(outBuf, i * outByteStride));
+					key->position = convertVectorHandedness(readVec3DF(BufferOffset(outBuf, i * outByteStride)));
 				}
 				break;
 			}
@@ -392,7 +433,7 @@ void CGLTFMeshFileLoader::MeshExtractor::loadAnimation(
 				for (std::size_t i = 0; i < n_frames; ++i) {
 					auto *key = mesh->addRotationKey(joint);
 					key->frame = getFrame(i);
-					key->rotation = readQuaternion(BufferOffset(outBuf, i * outByteStride));
+					key->rotation = convertRotationHandedness(readQuaternion(BufferOffset(outBuf, i * outByteStride)));
 				}
 				break;
 			}
@@ -405,8 +446,6 @@ void CGLTFMeshFileLoader::MeshExtractor::loadAnimation(
 					auto *key = mesh->addScaleKey(joint);
 					key->frame = getFrame(i);
 					key->scale = readVec3DF(BufferOffset(outBuf, i * outByteStride));
-					// HACK undo RHS - LHS conversion; it should not have been applied in the first place.
-					key->scale.Z = -key->scale.Z;
 				}
 				break;
 			}
@@ -587,7 +626,7 @@ core::vector3df CGLTFMeshFileLoader::MeshExtractor::readVec3DF(
 	return core::vector3df(
 		readPrimitive<float>(readFrom),
 		readPrimitive<float>(BufferOffset(readFrom, sizeof(float))),
-		-readPrimitive<float>(BufferOffset(readFrom, 2 *
+		readPrimitive<float>(BufferOffset(readFrom, 2 *
 		sizeof(float))));
 }
 
@@ -597,8 +636,7 @@ core::quaternion CGLTFMeshFileLoader::MeshExtractor::readQuaternion(
 	return core::quaternion(
 		readPrimitive<float>(readFrom),
 		readPrimitive<float>(BufferOffset(readFrom, sizeof(float))),
-		// TODO is this handedness conversion correct (probably not)?
-		-readPrimitive<float>(BufferOffset(readFrom, 2 * sizeof(float))),
+		readPrimitive<float>(BufferOffset(readFrom, 2 * sizeof(float))),
 		readPrimitive<float>(BufferOffset(readFrom, 3 * sizeof(float))));
 }
 
@@ -611,9 +649,7 @@ core::matrix4 CGLTFMeshFileLoader::MeshExtractor::readMatrix4(
 		}
 		core::matrix4 mat;
 		mat.setM(M);
-		// glTF uses column-major order, Irrlicht uses row-major order.
-		mat = mat.getTransposed();
-		return leftToRight * mat * rightToLeft;
+		return convertMatrixHandedness(mat);
 }
 
 /**
@@ -630,8 +666,7 @@ void CGLTFMeshFileLoader::MeshExtractor::copyPositions(
 	const auto byteStride = getByteStride(accessorIdx);
 
 	for (std::size_t i = 0; i < count; i++) {
-		const auto v = readVec3DF(BufferOffset(buffer, byteStride * i));
-		vertices[i].Pos = v;
+		vertices[i].Pos = convertVectorHandedness(readVec3DF(BufferOffset(buffer, byteStride * i)));
 	}
 }
 
@@ -647,9 +682,8 @@ void CGLTFMeshFileLoader::MeshExtractor::copyNormals(
 	const auto count = getElemCount(accessorIdx);
 	
 	for (std::size_t i = 0; i < count; i++) {
-		const auto n = readVec3DF(BufferOffset(buffer,
-			3 * sizeof(float) * i));
-		vertices[i].Normal = n;
+		vertices[i].Normal = convertVectorHandedness(readVec3DF(BufferOffset(buffer,
+			3 * sizeof(float) * i)));
 	}
 }
 
