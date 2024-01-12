@@ -50,7 +50,13 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 enable_testing()
 
 add_subdirectory(source/lib/catch2)
-add_subdirectory(source/lib/tiniergltf)
+include(FetchContent)
+FetchContent_Declare(
+  tiniergltf
+  GIT_REPOSITORY https://github.com/appgurueu/tiniergltf.git
+  GIT_TAG        40618acfb553e0595cd30ee1509587607e8e214c
+)
+FetchContent_MakeAvailable(tiniergltf)
 add_subdirectory(source/Irrlicht)
 add_subdirectory(test)
 
