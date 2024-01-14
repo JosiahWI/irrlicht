@@ -83,21 +83,21 @@ CGLTFMeshFileLoader::Accessor<T>::Accessor(const tiniergltf::GlTF& model, std::s
 
 #define ACCESSOR_TYPES(T, U, V) \
 	template<> \
-	tiniergltf::Accessor::Type CGLTFMeshFileLoader::Accessor<T>::getType() { \
+	constexpr tiniergltf::Accessor::Type CGLTFMeshFileLoader::Accessor<T>::getType() { \
 		return tiniergltf::Accessor::Type::U; \
 	} \
 	template<> \
-	tiniergltf::Accessor::ComponentType CGLTFMeshFileLoader::Accessor<T>::getComponentType() { \
+	constexpr tiniergltf::Accessor::ComponentType CGLTFMeshFileLoader::Accessor<T>::getComponentType() { \
 		return tiniergltf::Accessor::ComponentType::V; \
 	} \
 
 #define VEC_ACCESSOR_TYPES(T, U, n) \
 	template<> \
-	tiniergltf::Accessor::Type CGLTFMeshFileLoader::Accessor<std::array<T, n>>::getType() { \
+	constexpr tiniergltf::Accessor::Type CGLTFMeshFileLoader::Accessor<std::array<T, n>>::getType() { \
 		return tiniergltf::Accessor::Type::VEC##n; \
 	} \
 	template<> \
-	tiniergltf::Accessor::ComponentType CGLTFMeshFileLoader::Accessor<std::array<T, n>>::getComponentType() { \
+	constexpr tiniergltf::Accessor::ComponentType CGLTFMeshFileLoader::Accessor<std::array<T, n>>::getComponentType() { \
 		return tiniergltf::Accessor::ComponentType::U; \
 	} \
 	template<> \
@@ -119,7 +119,6 @@ ACCESSOR_PRIMITIVE(u8, UNSIGNED_BYTE)
 ACCESSOR_PRIMITIVE(u16, UNSIGNED_SHORT)
 ACCESSOR_PRIMITIVE(u32, UNSIGNED_INT)
 
-ACCESSOR_TYPES(core::vector2df, VEC2, FLOAT)
 ACCESSOR_TYPES(core::vector3df, VEC3, FLOAT)
 ACCESSOR_TYPES(core::quaternion, VEC4, FLOAT)
 ACCESSOR_TYPES(core::matrix4, MAT4, FLOAT)
@@ -166,14 +165,6 @@ core::matrix4 CGLTFMeshFileLoader::rawget(const void *ptr) {
 }
 
 template<>
-core::vector2df CGLTFMeshFileLoader::rawget(const void *ptr) {
-	const f32 *fptr = reinterpret_cast<const f32*>(ptr);
-	return core::vector2df(
-		rawget<f32>(fptr),
-		rawget<f32>(fptr + 1));
-}
-
-template<>
 core::vector3df CGLTFMeshFileLoader::rawget(const void *ptr) {
 	const f32 *fptr = reinterpret_cast<const f32*>(ptr);
 	return core::vector3df(
@@ -190,6 +181,49 @@ core::quaternion CGLTFMeshFileLoader::rawget(const void *ptr) {
 		rawget<f32>(fptr + 1),
 		rawget<f32>(fptr + 2), 
 		rawget<f32>(fptr + 3));
+}
+
+template<std::size_t N>
+CGLTFMeshFileLoader::NormalizedValuesAccessor<N>
+CGLTFMeshFileLoader::createNormalizedValuesAccessor(
+		const tiniergltf::GlTF& model,
+		const std::size_t accessorIdx)
+{
+	const auto &acc = model.accessors->at(accessorIdx);
+	switch (acc.componentType) {
+		case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE:
+			return Accessor<std::array<u8, N>>(model, accessorIdx);
+		case tiniergltf::Accessor::ComponentType::UNSIGNED_SHORT:
+			return Accessor<std::array<u16, N>>(model, accessorIdx);
+		case tiniergltf::Accessor::ComponentType::FLOAT:
+			return Accessor<std::array<f32, N>>(model, accessorIdx);
+		default:
+			throw std::runtime_error("invalid component type");
+	}
+}
+
+template<std::size_t N>
+std::array<f32, N> CGLTFMeshFileLoader::getNormalizedValues(
+	const NormalizedValuesAccessor<N> &accessor,
+	const std::size_t i)
+{
+	std::array<f32, N> values;
+	if (std::holds_alternative<Accessor<std::array<u8, N>>>(accessor)) {
+		const auto u8s = std::get<Accessor<std::array<u8, N>>>(accessor).get(i);
+		for (u8 i = 0; i < N; ++i)
+			values[i] = static_cast<f32>(u8s[i]) / std::numeric_limits<u8>::max();
+	} else if (std::holds_alternative<Accessor<std::array<u16, N>>>(accessor)) {
+		const auto u16s = std::get<Accessor<std::array<u16, N>>>(accessor).get(i);
+		for (u8 i = 0; i < N; ++i)
+			values[i] = static_cast<f32>(u16s[i]) / std::numeric_limits<u16>::max();
+	} else {
+		values = std::get<Accessor<std::array<f32, N>>>(accessor).get(i);
+		for (u8 i = 0; i < N; ++i) {
+			if (values[i] < 0 || values[i] > 1)
+				throw std::runtime_error("invalid normalized value");
+		}
+	}
+	return values;
 }
 
 CGLTFMeshFileLoader::CGLTFMeshFileLoader() noexcept
@@ -305,8 +339,6 @@ void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
 				const auto jointAccessor = ([&]() -> std::variant<Accessor<std::array<u8, 4>>, Accessor<std::array<u16, 4>>> {
 					const auto idx = joints->at(set);
 					const auto &acc = m_model.accessors->at(idx);
-					if (acc.type != tiniergltf::Accessor::Type::VEC4)
-						throw std::runtime_error("invalid accessor type");
 
 					switch (acc.componentType) {
 						case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE:
@@ -318,26 +350,7 @@ void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
 					}
 				})();
 
-				const auto weightAccessor = ([&]() -> std::variant<
-						Accessor<std::array<u8, 4>>,
-						Accessor<std::array<u16, 4>>,
-						Accessor<std::array<f32, 4>>> {
-					const auto idx = weights->at(set);
-					const auto &acc = m_model.accessors->at(idx);
-					if (acc.type != tiniergltf::Accessor::Type::VEC4)
-						throw std::runtime_error("invalid accessor type");
-
-					switch (acc.componentType) {
-						case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE:
-							return Accessor<std::array<u8, 4>>(m_model, idx);
-						case tiniergltf::Accessor::ComponentType::UNSIGNED_SHORT:
-							return Accessor<std::array<u16, 4>>(m_model, idx);
-						case tiniergltf::Accessor::ComponentType::FLOAT:
-							return Accessor<std::array<f32, 4>>(m_model, idx);
-						default:
-							throw std::runtime_error("invalid component type");
-					}
-				})();
+				const auto weightAccessor = createNormalizedValuesAccessor<4>(m_model, weights->at(set));
 
 				for (std::size_t v = 0; v < vertices->size(); ++v) {
 					std::array<u16, 4> jointIdxs;
@@ -347,18 +360,7 @@ void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
 					} else if (std::holds_alternative<Accessor<std::array<u16, 4>>>(jointAccessor)) {
 						jointIdxs = std::get<Accessor<std::array<u16, 4>>>(jointAccessor).get(v);
 					}
-					std::array<f32, 4> strengths;
-					if (std::holds_alternative<Accessor<std::array<u8, 4>>>(weightAccessor)) {
-						const auto u8s = std::get<Accessor<std::array<u8, 4>>>(weightAccessor).get(v);
-						for (u8 i = 0; i < 4; ++i)
-							strengths[i] = static_cast<f32>(u8s[i]) / std::numeric_limits<u8>::max();
-					} else if (std::holds_alternative<Accessor<std::array<u16, 4>>>(weightAccessor)) {
-						const auto u16s = std::get<Accessor<std::array<u16, 4>>>(weightAccessor).get(v);
-						for (u8 i = 0; i < 4; ++i)
-							strengths[i] = static_cast<f32>(u16s[i]) / std::numeric_limits<u16>::max();
-					} else {
-						strengths = std::get<Accessor<std::array<f32, 4>>>(weightAccessor).get(v);
-					}
+					std::array<f32, 4> strengths = getNormalizedValues(weightAccessor, v);
 
 					// 4 joints per set
 					for (std::size_t in_set = 0; in_set < 4; ++in_set) {
@@ -700,7 +702,7 @@ void CGLTFMeshFileLoader::MeshExtractor::copyNormals(
 		std::vector<vertex_t>& vertices) const
 {
 	const Accessor<core::vector3df> accessor(m_model, accessorIdx);
-	for (std::size_t i = 0; i < accessor.getCount(); i++) {
+	for (std::size_t i = 0; i < accessor.getCount(); ++i) {
 		vertices[i].Normal = convertHandedness(accessor.get(i));
 	}
 }
@@ -713,9 +715,11 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 		const std::size_t accessorIdx,
 		std::vector<vertex_t>& vertices) const
 {
-	const Accessor<core::vector2df> accessor(m_model, accessorIdx);
-	for (std::size_t i = 0; i < accessor.getCount(); i++) {
-		vertices[i].TCoords = accessor.get(i);
+	const auto accessor = createNormalizedValuesAccessor<2>(m_model, accessorIdx);
+	const auto count = std::visit([](auto&& a) {return a.getCount();}, accessor);
+	for (std::size_t i = 0; i < count; ++i) {
+		const auto vals = getNormalizedValues(accessor, i);
+		vertices[i].TCoords = core::vector2df(vals[0], vals[1]);
 	}
 }
 

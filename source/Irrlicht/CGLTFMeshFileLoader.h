@@ -40,8 +40,8 @@ private:
 	class Accessor {
 	public:
 		Accessor(const tiniergltf::GlTF& model, std::size_t accessorIdx);
-		static tiniergltf::Accessor::Type getType();
-		static tiniergltf::Accessor::ComponentType getComponentType();
+		static constexpr tiniergltf::Accessor::Type getType();
+		static constexpr tiniergltf::Accessor::ComponentType getComponentType();
 		std::size_t getCount() const { return count; }
 		T get(std::size_t i) const;
 	private:
@@ -49,6 +49,21 @@ private:
 		std::size_t byteStride;
 		std::size_t count;
 	};
+
+	template<std::size_t N>
+	using NormalizedValuesAccessor = std::variant<Accessor<std::array<u8, N>>,
+			Accessor<std::array<u16, N>>,
+			Accessor<std::array<f32, N>>>;
+
+	template<std::size_t N>
+	static NormalizedValuesAccessor<N> createNormalizedValuesAccessor(
+		const tiniergltf::GlTF& model,
+		const std::size_t accessorIdx);
+
+	template<std::size_t N>
+	static std::array<f32, N> getNormalizedValues(
+		const NormalizedValuesAccessor<N> &accessor,
+		const std::size_t i);
 
 	class MeshExtractor {
 	public:
