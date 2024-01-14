@@ -578,7 +578,7 @@ std::optional<std::vector<u16>> CGLTFMeshFileLoader::MeshExtractor::getIndices(
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
 {
-	const auto accessorIdx = getIndicesAccessorIdx(meshIdx, primitiveIdx);
+	const auto accessorIdx = m_model.meshes->at(meshIdx).primitives.at(primitiveIdx).indices;
 	if (!accessorIdx.has_value())
 		return std::nullopt; // non-indexed geometry
 
@@ -632,8 +632,8 @@ std::optional<std::vector<video::S3DVertex>> CGLTFMeshFileLoader::MeshExtractor:
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
 {
-	const auto positionAccessorIdx = getPositionAccessorIdx(
-			meshIdx, primitiveIdx);
+	const auto &attributes = m_model.meshes->at(meshIdx).primitives.at(primitiveIdx).attributes;
+	const auto positionAccessorIdx = attributes.position;
 	if (!positionAccessorIdx.has_value()) {
 		// "When positions are not specified, client implementations SHOULD skip primitive's rendering"
 		return std::nullopt;
@@ -645,16 +645,16 @@ std::optional<std::vector<video::S3DVertex>> CGLTFMeshFileLoader::MeshExtractor:
 	vertices.resize(vertexCount);
 	copyPositions(*positionAccessorIdx, vertices);
 
-	const auto normalAccessorIdx = getNormalAccessorIdx(
-			meshIdx, primitiveIdx);
+	const auto normalAccessorIdx = attributes.normal;
 	if (normalAccessorIdx.has_value()) {
 		copyNormals(normalAccessorIdx.value(), vertices);
 	}
+	// TODO verify that the automatic normal recalculation done in Minetest indeed works correctly
 
-	const auto tCoordAccessorIdx = getTCoordAccessorIdx(
-			meshIdx, primitiveIdx);
-	if (tCoordAccessorIdx.has_value()) {
-		copyTCoords(tCoordAccessorIdx.value(), vertices);
+	const auto& texcoords = m_model.meshes->at(meshIdx).primitives[primitiveIdx].attributes.texcoord;
+	if (texcoords.has_value()) {
+		const auto tCoordAccessorIdx = texcoords->at(0);
+		copyTCoords(tCoordAccessorIdx, vertices);
 	}
 
 	return vertices;
@@ -717,62 +717,6 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 	for (std::size_t i = 0; i < accessor.getCount(); i++) {
 		vertices[i].TCoords = accessor.get(i);
 	}
-}
-
-/**
- * The index of the accessor that contains the vertex indices. 
- * When this is undefined, the primitive defines non-indexed geometry. 
- * When defined, the accessor MUST have SCALAR type and an unsigned integer component type.
- * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_mesh_primitive_indices
- * Type: Integer
- * Required: NO
-*/
-std::optional<std::size_t> CGLTFMeshFileLoader::MeshExtractor::getIndicesAccessorIdx(
-		const std::size_t meshIdx,
-		const std::size_t primitiveIdx) const
-{
-	return m_model.meshes->at(meshIdx).primitives[primitiveIdx].indices;
-}
-
-/**
- * The index of the accessor that contains the POSITIONs.
- * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#meshes-overview
- * Type: VEC3 (Float)
-*/
-std::optional<std::size_t> CGLTFMeshFileLoader::MeshExtractor::getPositionAccessorIdx(
-		const std::size_t meshIdx,
-		const std::size_t primitiveIdx) const
-{
-	return m_model.meshes->at(meshIdx).primitives[primitiveIdx].attributes.position;
-}
-
-/**
- * The index of the accessor that contains the NORMALs.
- * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#meshes-overview
- * Type: VEC3 (Float)
- * ! Required: NO (Appears to not be, needs another pair of eyes to research.)
-*/
-std::optional<std::size_t> CGLTFMeshFileLoader::MeshExtractor::getNormalAccessorIdx(
-		const std::size_t meshIdx,
-		const std::size_t primitiveIdx) const
-{
-	return m_model.meshes->at(meshIdx).primitives[primitiveIdx].attributes.normal;
-}
-
-/**
- * The index of the accessor that contains the TEXCOORDs.
- * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#meshes-overview
- * Type: VEC3 (Float)
- * ! Required: YES (Appears so, needs another pair of eyes to research.)
-*/
-std::optional<std::size_t> CGLTFMeshFileLoader::MeshExtractor::getTCoordAccessorIdx(
-		const std::size_t meshIdx,
-		const std::size_t primitiveIdx) const
-{
-	const auto& texcoords = m_model.meshes->at(meshIdx).primitives[primitiveIdx].attributes.texcoord;
-	if (!texcoords.has_value())
-		return std::nullopt;
-	return texcoords->at(0);
 }
 
 /**
