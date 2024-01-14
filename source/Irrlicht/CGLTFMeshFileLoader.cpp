@@ -32,24 +32,27 @@
  * of the vertex indices.
  */
 
-// TODO also reverse winding order based on determinant of global transform
-
-
 namespace irr {
 
 namespace scene {
 
 // Right-to-left handedness conversions
 
-static inline core::vector3df convertVectorHandedness(core::vector3df p) {
+template<typename T>
+static inline T convertHandedness(const T &t);
+
+template<>
+core::vector3df convertHandedness(const core::vector3df &p) {
 	return core::vector3df(p.X, p.Y, -p.Z);
 }
 
-static inline core::quaternion convertRotationHandedness(core::quaternion q) {
+template<>
+core::quaternion convertHandedness(const core::quaternion &q) {
 	return core::quaternion(q.X, q.Y, -q.Z, q.W);
 }
 
-static inline core::matrix4 convertMatrixHandedness(core::matrix4 mat) {
+template<>
+core::matrix4 convertHandedness(const core::matrix4 &mat) {
 	// Base transformation between left & right handed coordinate systems.
 	static core::matrix4 invertZ = core::matrix4(
 		1, 0, 0, 0,
@@ -64,29 +67,114 @@ static inline core::matrix4 convertMatrixHandedness(core::matrix4 mat) {
 	return invertZ * mat * invertZ;
 }
 
-CGLTFMeshFileLoader::BufferOffset::BufferOffset(
-		const std::vector<unsigned char>& buf,
-		const std::size_t offset)
-	: m_buf(buf)
-	, m_offset(offset)
+template<class T>
+CGLTFMeshFileLoader::Accessor<T>::Accessor(const tiniergltf::GlTF& model, std::size_t accessorIdx)
 {
+	const auto& accessor = model.accessors->at(accessorIdx);
+	const auto& view = model.bufferViews->at(accessor.bufferView.value());
+	byteStride = view.byteStride.value_or(accessor.elementSize());
+	if (accessor.componentType != getComponentType() || accessor.type != getType())
+		throw std::runtime_error("invalid accessor");
+	count = accessor.count;
+
+	const auto& buffer = model.buffers->at(view.buffer);
+	buf = buffer.data.data() + view.byteOffset + accessor.byteOffset;
 }
 
-CGLTFMeshFileLoader::BufferOffset::BufferOffset(
-		const CGLTFMeshFileLoader::BufferOffset& other,
-		const std::size_t fromOffset)
-	: m_buf(other.m_buf)
-	, m_offset(other.m_offset + fromOffset)
+#define ACCESSOR_TYPES(T, U, V) \
+	template<> \
+	tiniergltf::Accessor::Type CGLTFMeshFileLoader::Accessor<T>::getType() { \
+		return tiniergltf::Accessor::Type::U; \
+	} \
+	template<> \
+	tiniergltf::Accessor::ComponentType CGLTFMeshFileLoader::Accessor<T>::getComponentType() { \
+		return tiniergltf::Accessor::ComponentType::V; \
+	} \
+
+#define VEC_ACCESSOR_TYPES(T, U, n) \
+	template<> \
+	tiniergltf::Accessor::Type CGLTFMeshFileLoader::Accessor<std::array<T, n>>::getType() { \
+		return tiniergltf::Accessor::Type::VEC##n; \
+	} \
+	template<> \
+	tiniergltf::Accessor::ComponentType CGLTFMeshFileLoader::Accessor<std::array<T, n>>::getComponentType() { \
+		return tiniergltf::Accessor::ComponentType::U; \
+	} \
+	template<> \
+	std::array<T, n> CGLTFMeshFileLoader::rawget(const void *ptr) { \
+		const T *tptr = reinterpret_cast<const T*>(ptr); \
+		std::array<T, n> res; \
+		for (u8 i = 0; i < n; ++i) \
+			res[i] = rawget<T>(tptr + i); \
+		return res; \
+	}
+
+#define ACCESSOR_PRIMITIVE(T, U) ACCESSOR_TYPES(T, SCALAR, U) \
+	VEC_ACCESSOR_TYPES(T, U, 2) \
+	VEC_ACCESSOR_TYPES(T, U, 3) \
+	VEC_ACCESSOR_TYPES(T, U, 4) \
+
+ACCESSOR_PRIMITIVE(f32, FLOAT)
+ACCESSOR_PRIMITIVE(u8, UNSIGNED_BYTE)
+ACCESSOR_PRIMITIVE(u16, UNSIGNED_SHORT)
+ACCESSOR_PRIMITIVE(u32, UNSIGNED_INT)
+
+ACCESSOR_TYPES(core::vector2df, VEC2, FLOAT)
+ACCESSOR_TYPES(core::vector3df, VEC3, FLOAT)
+ACCESSOR_TYPES(core::quaternion, VEC4, FLOAT)
+ACCESSOR_TYPES(core::matrix4, MAT4, FLOAT)
+
+template<class T>
+T CGLTFMeshFileLoader::Accessor<T>::get(std::size_t i) const
 {
+	return rawget<T>(buf + i * byteStride);
 }
 
-/**
- * Get a raw unsigned char (ubyte) from a buffer offset.
-*/
-unsigned char CGLTFMeshFileLoader::BufferOffset::at(
-		const std::size_t fromOffset) const
-{
-	return m_buf.at(m_offset + fromOffset);
+// TODO support big endian systems
+template<typename T>
+T CGLTFMeshFileLoader::rawget(const void *ptr) {
+	return *reinterpret_cast<const T*>(ptr);
+}
+
+// Note that these "more specialized templates" should win.
+
+template<>
+core::matrix4 CGLTFMeshFileLoader::rawget(const void *ptr) {
+	const f32 *fptr = reinterpret_cast<const f32*>(ptr);
+	f32 M[16];
+	for (u8 i = 0; i < 16; ++i) {
+		M[i] = rawget<f32>(fptr + i);
+	}
+	core::matrix4 mat;
+	mat.setM(M);
+	return mat;
+}
+
+template<>
+core::vector2df CGLTFMeshFileLoader::rawget(const void *ptr) {
+	const f32 *fptr = reinterpret_cast<const f32*>(ptr);
+	return core::vector2df(
+		rawget<f32>(fptr),
+		rawget<f32>(fptr + 1));
+}
+
+template<>
+core::vector3df CGLTFMeshFileLoader::rawget(const void *ptr) {
+	const f32 *fptr = reinterpret_cast<const f32*>(ptr);
+	return core::vector3df(
+		rawget<f32>(fptr),
+		rawget<f32>(fptr + 1),
+		rawget<f32>(fptr + 2));
+}
+
+template<>
+core::quaternion CGLTFMeshFileLoader::rawget(const void *ptr) {
+	const f32 *fptr = reinterpret_cast<const f32*>(ptr);
+	return core::quaternion(
+		rawget<f32>(fptr),
+		rawget<f32>(fptr + 1),
+		rawget<f32>(fptr + 2), 
+		rawget<f32>(fptr + 3));
 }
 
 CGLTFMeshFileLoader::CGLTFMeshFileLoader() noexcept
@@ -199,61 +287,72 @@ void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
 
 			const auto &weights = attrs.weights;
 			for (std::size_t set = 0; set < joints->size(); ++set) {
-				const auto jointAccIdx = joints->at(set);
-				const auto &jointAcc = m_model.accessors->at(jointAccIdx);
-				const auto &jointBuf = getBuffer(jointAccIdx);
-				const auto jointBufByteStride = getByteStride(jointAccIdx);
+				const auto jointAccessor = ([&]() -> std::variant<Accessor<std::array<u8, 4>>, Accessor<std::array<u16, 4>>> {
+					const auto idx = joints->at(set);
+					const auto &acc = m_model.accessors->at(idx);
+					if (acc.type != tiniergltf::Accessor::Type::VEC4)
+						throw std::runtime_error("invalid accessor type");
 
-				const auto weightAccIdx = weights->at(set);
-				const auto &weightAcc = m_model.accessors->at(weightAccIdx);
-				const auto &weightBuf = getBuffer(weightAccIdx);
-				const auto weightBufByteStride = getByteStride(weightAccIdx);
+					switch (acc.componentType) {
+						case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE:
+							return Accessor<std::array<u8, 4>>(m_model, idx);
+						case tiniergltf::Accessor::ComponentType::UNSIGNED_SHORT:
+							return Accessor<std::array<u16, 4>>(m_model, idx);
+						default:
+							throw std::runtime_error("invalid component type");
+					}
+				})();
 
+				const auto weightAccessor = ([&]() -> std::variant<
+						Accessor<std::array<u8, 4>>,
+						Accessor<std::array<u16, 4>>,
+						Accessor<std::array<f32, 4>>> {
+					const auto idx = weights->at(set);
+					const auto &acc = m_model.accessors->at(idx);
+					if (acc.type != tiniergltf::Accessor::Type::VEC4)
+						throw std::runtime_error("invalid accessor type");
 
-				if (jointAcc.type != tiniergltf::Accessor::Type::VEC4
-						|| weightAcc.type != tiniergltf::Accessor::Type::VEC4)
-					throw std::runtime_error("invalid accessor type");
+					switch (acc.componentType) {
+						case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE:
+							return Accessor<std::array<u8, 4>>(m_model, idx);
+						case tiniergltf::Accessor::ComponentType::UNSIGNED_SHORT:
+							return Accessor<std::array<u16, 4>>(m_model, idx);
+						case tiniergltf::Accessor::ComponentType::FLOAT:
+							return Accessor<std::array<f32, 4>>(m_model, idx);
+						default:
+							throw std::runtime_error("invalid component type");
+					}
+				})();
 
 				for (std::size_t v = 0; v < vertices->size(); ++v) {
+					std::array<u16, 4> jointIdxs;
+					if (std::holds_alternative<Accessor<std::array<u8, 4>>>(jointAccessor)) {
+						const auto jointIdxsU8 = std::get<Accessor<std::array<u8, 4>>>(jointAccessor).get(v);
+						jointIdxs = {jointIdxsU8[0], jointIdxsU8[1], jointIdxsU8[2], jointIdxsU8[3]};
+					} else if (std::holds_alternative<Accessor<std::array<u16, 4>>>(jointAccessor)) {
+						jointIdxs = std::get<Accessor<std::array<u16, 4>>>(jointAccessor).get(v);
+					}
+					std::array<f32, 4> strengths;
+					if (std::holds_alternative<Accessor<std::array<u8, 4>>>(weightAccessor)) {
+						const auto u8s = std::get<Accessor<std::array<u8, 4>>>(weightAccessor).get(v);
+						for (u8 i = 0; i < 4; ++i)
+							strengths[i] = static_cast<f32>(u8s[i]) / std::numeric_limits<u8>::max();
+					} else if (std::holds_alternative<Accessor<std::array<u16, 4>>>(weightAccessor)) {
+						const auto u16s = std::get<Accessor<std::array<u16, 4>>>(weightAccessor).get(v);
+						for (u8 i = 0; i < 4; ++i)
+							strengths[i] = static_cast<f32>(u16s[i]) / std::numeric_limits<u16>::max();
+					} else {
+						strengths = std::get<Accessor<std::array<f32, 4>>>(weightAccessor).get(v);
+					}
+
 					// 4 joints per set
 					for (std::size_t in_set = 0; in_set < 4; ++in_set) {
-						u16 jointIdx;
-						const auto jointOff = BufferOffset(jointBuf,
-								v * jointBufByteStride + in_set * jointAcc.componentSize());
-						switch (jointAcc.componentType) {
-							case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE:
-								jointIdx = readPrimitive<u8>(jointOff);
-								break;
-							case tiniergltf::Accessor::ComponentType::UNSIGNED_SHORT:
-								jointIdx = readPrimitive<u16>(jointOff);
-								break;
-							default:
-								throw std::runtime_error("invalid component type");
-						}
-
-						f32 strength;
-						const auto weightOff = BufferOffset(weightBuf,
-								v * weightBufByteStride + in_set * weightAcc.componentSize());
-						switch (weightAcc.componentType) {
-							case tiniergltf::Accessor::ComponentType::FLOAT:
-								strength = readPrimitive<f32>(weightOff);
-								break;
-							case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE:
-								strength = (f32) readPrimitive<u8>(weightOff)
-										/ std::numeric_limits<u8>::max();
-								break;
-							case tiniergltf::Accessor::ComponentType::UNSIGNED_SHORT:
-								strength = (f32) readPrimitive<u16>(weightOff)
-										/ std::numeric_limits<u16>::max();
-								break;
-							default:
-								throw std::runtime_error("invalid component type");
-						}
-
+						u16 jointIdx = jointIdxs[in_set];
+						f32 strength = strengths[in_set];
 						if (strength == 0)
 							continue;
 
-						CSkinnedMesh::SWeight *weight = mesh->addWeight(m_loaded_nodes.at(skin.joints[jointIdx]));
+						CSkinnedMesh::SWeight *weight = mesh->addWeight(m_loaded_nodes.at(skin.joints.at(jointIdx)));
 						weight->buffer_id = buffer_id;
 						weight->vertex_id = v;
 						weight->strength = strength;
@@ -272,7 +371,7 @@ static core::matrix4 loadTransform(std::optional<std::variant<tiniergltf::Node::
 		// TODO test this path using glTF sample models
 		const auto &m = std::get<tiniergltf::Node::Matrix>(*transform);
 		// Note: Under the hood, this casts these doubles to floats.
-		core::matrix4 mat = convertMatrixHandedness(core::matrix4(
+		core::matrix4 mat = convertHandedness(core::matrix4(
 			m[0], m[1], m[2], m[3],
 			m[4], m[5], m[6], m[7],
 			m[8], m[9], m[10], m[11],
@@ -306,7 +405,7 @@ static core::matrix4 loadTransform(std::optional<std::variant<tiniergltf::Node::
 		joint->Animatedposition = core::vector3df(trans[0], trans[1], -trans[2]);
 		transMat.setTranslation(joint->Animatedposition);
 		core::matrix4 rotMat;
-		joint->Animatedrotation = convertRotationHandedness(core::quaternion(rot[0], rot[1], rot[2], rot[3]));
+		joint->Animatedrotation = convertHandedness(core::quaternion(rot[0], rot[1], rot[2], rot[3]));
 		core::quaternion(joint->Animatedrotation).getMatrix_transposed(rotMat);
 		joint->Animatedscale = core::vector3df(scale[0], scale[1], scale[2]);
 		core::matrix4 scaleMat;
@@ -369,15 +468,11 @@ void CGLTFMeshFileLoader::MeshExtractor::loadSkins(CSkinnedMesh* mesh)
 	for (const auto &skin : *m_model.skins) {
 		if (!skin.inverseBindMatrices.has_value())
 			continue;
-		const auto accessorIdx = *skin.inverseBindMatrices;
-		const auto &buffer = getBuffer(accessorIdx);
-		const auto count = getElemCount(accessorIdx);
-		if (count < skin.joints.size())
+		const Accessor<core::matrix4> accessor(m_model, *skin.inverseBindMatrices);
+		if (accessor.getCount() < skin.joints.size())
 			throw std::runtime_error("accessor contains too few matrices");
-		const auto byteStride = getByteStride(accessorIdx);
 		for (std::size_t i = 0; i < skin.joints.size(); ++i) {
-			m_loaded_nodes.at(skin.joints[i])->GlobalInversedMatrix =
-					readMatrix4(BufferOffset(buffer, i * byteStride));
+			m_loaded_nodes.at(skin.joints[i])->GlobalInversedMatrix = convertHandedness(accessor.get(i));
 		}
 	}
 }
@@ -392,60 +487,38 @@ void CGLTFMeshFileLoader::MeshExtractor::loadAnimation(
 		if (sampler.interpolation != tiniergltf::AnimationSampler::Interpolation::LINEAR)
 			throw std::runtime_error("unsupported interpolation");
 
-		const auto n_frames = getElemCount(sampler.input);
-		const auto &accessor = m_model.accessors->at(sampler.input);
-		if (accessor.componentType != tiniergltf::Accessor::ComponentType::FLOAT
-				|| accessor.type != tiniergltf::Accessor::Type::SCALAR)
-			throw std::runtime_error("invalid timestamp accessor");
-		const auto &inputBuf = getBuffer(sampler.input);
-		const auto byteStride = getByteStride(sampler.input);
-		const auto &getFrame = [=](const std::size_t i) {
-			return readPrimitive<float>(BufferOffset(inputBuf, byteStride * i));
-		};
-
-		const auto &outAcc = m_model.accessors->at(sampler.output);
-		const auto &outBuf = getBuffer(sampler.output);
-		const auto outByteStride = getByteStride(sampler.output);
+		const Accessor<f32> inputAccessor(m_model, sampler.input);
+		const auto n_frames = inputAccessor.getCount();
 
 		if (!channel.target.node.has_value())
 			throw std::runtime_error("no animated node");
 
 		const auto &joint = m_loaded_nodes.at(*channel.target.node);
-
 		switch (channel.target.path) {
 			case tiniergltf::AnimationChannelTarget::Path::TRANSLATION: {
-				if (outAcc.componentType != tiniergltf::Accessor::ComponentType::FLOAT
-						|| outAcc.type != tiniergltf::Accessor::Type::VEC3)
-					throw std::runtime_error("invalid translation accessor");
-
+				const Accessor<core::vector3df> outputAccessor(m_model, sampler.output);
 				for (std::size_t i = 0; i < n_frames; ++i) {
 					auto *key = mesh->addPositionKey(joint);
-					key->frame = getFrame(i);
-					key->position = convertVectorHandedness(readVec3DF(BufferOffset(outBuf, i * outByteStride)));
+					key->frame = inputAccessor.get(i);
+					key->position = convertHandedness(outputAccessor.get(i));
 				}
 				break;
 			}
 			case tiniergltf::AnimationChannelTarget::Path::ROTATION: {
-				if (outAcc.componentType != tiniergltf::Accessor::ComponentType::FLOAT
-						|| outAcc.type != tiniergltf::Accessor::Type::VEC4)
-					throw std::runtime_error("invalid rotation accessor");
-
+				const Accessor<core::quaternion> outputAccessor(m_model, sampler.output);
 				for (std::size_t i = 0; i < n_frames; ++i) {
 					auto *key = mesh->addRotationKey(joint);
-					key->frame = getFrame(i);
-					key->rotation = convertRotationHandedness(readQuaternion(BufferOffset(outBuf, i * outByteStride)));
+					key->frame = inputAccessor.get(i);
+					key->rotation = convertHandedness(outputAccessor.get(i));
 				}
 				break;
 			}
 			case tiniergltf::AnimationChannelTarget::Path::SCALE: {
-				if (outAcc.componentType != tiniergltf::Accessor::ComponentType::FLOAT
-						|| outAcc.type != tiniergltf::Accessor::Type::VEC3)
-					throw std::runtime_error("invalid scale accessor");
-
+				const Accessor<core::vector3df> outputAccessor(m_model, sampler.output);
 				for (std::size_t i = 0; i < n_frames; ++i) {
 					auto *key = mesh->addScaleKey(joint);
-					key->frame = getFrame(i);
-					key->scale = readVec3DF(BufferOffset(outBuf, i * outByteStride));
+					key->frame = inputAccessor.get(i);
+					key->scale = outputAccessor.get(i);
 				}
 				break;
 			}
@@ -493,39 +566,43 @@ std::optional<std::vector<u16>> CGLTFMeshFileLoader::MeshExtractor::getIndices(
 	const auto accessorIdx = getIndicesAccessorIdx(meshIdx, primitiveIdx);
 	if (!accessorIdx.has_value())
 		return std::nullopt; // non-indexed geometry
-	const auto &accessor = m_model.accessors->at(accessorIdx.value());
-	
-	const auto& buf = getBuffer(accessorIdx.value());
 
-	std::vector<u16> indices{};
-	const auto count = getElemCount(accessorIdx.value());
+	const auto accessor = ([&]() -> std::variant<Accessor<u8>, Accessor<u16>, Accessor<u32>> {
+		const auto &acc = m_model.accessors->at(*accessorIdx);
+		switch (acc.componentType) {
+			case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE:
+				return Accessor<u8>(m_model, *accessorIdx);
+			case tiniergltf::Accessor::ComponentType::UNSIGNED_SHORT:
+				return Accessor<u16>(m_model, *accessorIdx);
+			case tiniergltf::Accessor::ComponentType::UNSIGNED_INT:
+				return Accessor<u32>(m_model, *accessorIdx);
+			default:
+				throw std::runtime_error("invalid component type");
+		}
+	})();
+	const auto count = std::visit([](auto&& a) {return a.getCount();}, accessor);
+
+	std::vector<u16> indices;
 	for (std::size_t i = 0; i < count; ++i) {
+		// TODO (low-priority) also reverse winding order based on determinant of global transform
+		// FIXME this hack also reverses triangle draw order
 		std::size_t elemIdx = count - i - 1; // reverse index order
 		u16 index;
 		// Note: glTF forbids the max value for each component type.
-		switch (accessor.componentType) {
-			case tiniergltf::Accessor::ComponentType::UNSIGNED_BYTE: {
-				index = readPrimitive<u8>(BufferOffset(buf, elemIdx * sizeof(u8)));
-				if (index == std::numeric_limits<u8>::max())
-					throw std::runtime_error("invalid index");
-				break;
-			}
-			case tiniergltf::Accessor::ComponentType::UNSIGNED_SHORT: {
-				index = readPrimitive<u16>(BufferOffset(buf, elemIdx * sizeof(u16)));
-				if (index == std::numeric_limits<u16>::max())
-					throw std::runtime_error("invalid index");
-				break;
-			}
-			case tiniergltf::Accessor::ComponentType::UNSIGNED_INT: {
-				u32 indexWide = readPrimitive<u32>(BufferOffset(buf, elemIdx * sizeof(u32)));
-				// Use >= here for consistency.
-				if (indexWide >= std::numeric_limits<u16>::max())
-					throw std::runtime_error("index too large (>= 65536)");
-				index = (u16) indexWide;
-				break;
-			}
-			default:
-				throw std::runtime_error("invalid index component type");
+		if (std::holds_alternative<Accessor<u8>>(accessor)) {
+			index = std::get<Accessor<u8>>(accessor).get(elemIdx);
+			if (index == std::numeric_limits<u8>::max())
+				throw std::runtime_error("invalid index");
+		} else if (std::holds_alternative<Accessor<u16>>(accessor)) {
+			index = std::get<Accessor<u16>>(accessor).get(elemIdx);
+			if (index == std::numeric_limits<u16>::max())
+				throw std::runtime_error("invalid index");
+		} else if (std::holds_alternative<Accessor<u32>>(accessor)) {
+			u32 indexWide = std::get<Accessor<u32>>(accessor).get(elemIdx);
+			// Use >= here for consistency.
+			if (indexWide >= std::numeric_limits<u16>::max())
+				throw std::runtime_error("index too large (>= 65536)");
+			index = indexWide;
 		}
 		indices.push_back(index);
 	}
@@ -548,7 +625,9 @@ std::optional<std::vector<video::S3DVertex>> CGLTFMeshFileLoader::MeshExtractor:
 	}
 
 	std::vector<vertex_t> vertices{};
-	vertices.resize(getElemCount(*positionAccessorIdx));
+	// HACK peeking directly in the accessor data doesn't feel right
+	const auto vertexCount = m_model.accessors->at(*positionAccessorIdx).count;
+	vertices.resize(vertexCount);
 	copyPositions(*positionAccessorIdx, vertices);
 
 	const auto normalAccessorIdx = getNormalAccessorIdx(
@@ -584,75 +663,6 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getPrimitiveCount(
 }
 
 /**
- * Templated buffer reader. Based on type width.
- * This is specifically used to build upon to read more complex data types.
- * It is also used raw to read arrays directly.
- * Basically we're using the width of the type to infer 
- * how big of a gap we have from the beginning of the buffer.
-*/
-template <typename T>
-T CGLTFMeshFileLoader::MeshExtractor::readPrimitive(
-		const BufferOffset& readFrom)
-{
-	unsigned char d[sizeof(T)]{};
-	for (std::size_t i = 0; i < sizeof(T); ++i) {
-		d[i] = readFrom.at(i);
-	}
-	T dest;
-	std::memcpy(&dest, d, sizeof(dest));
-	return dest;
-}
-
-/**
- * Read a vector2df from a buffer at an offset.
- * @return vec2 core::Vector2df
-*/
-core::vector2df CGLTFMeshFileLoader::MeshExtractor::readVec2DF(
-		const CGLTFMeshFileLoader::BufferOffset& readFrom)
-{
-	return core::vector2df(readPrimitive<float>(readFrom),
-		readPrimitive<float>(BufferOffset(readFrom, sizeof(float))));
-
-}
-
-/**
- * Read a vector3df from a buffer at an offset.
- * Also does right-to-left-handed coordinate system conversion (inverts Z axis).
- * @return vec3 core::Vector3df
-*/
-core::vector3df CGLTFMeshFileLoader::MeshExtractor::readVec3DF(
-		const BufferOffset& readFrom)
-{
-	return core::vector3df(
-		readPrimitive<float>(readFrom),
-		readPrimitive<float>(BufferOffset(readFrom, sizeof(float))),
-		readPrimitive<float>(BufferOffset(readFrom, 2 *
-		sizeof(float))));
-}
-
-core::quaternion CGLTFMeshFileLoader::MeshExtractor::readQuaternion(
-		const BufferOffset& readFrom)
-{
-	return core::quaternion(
-		readPrimitive<float>(readFrom),
-		readPrimitive<float>(BufferOffset(readFrom, sizeof(float))),
-		readPrimitive<float>(BufferOffset(readFrom, 2 * sizeof(float))),
-		readPrimitive<float>(BufferOffset(readFrom, 3 * sizeof(float))));
-}
-
-core::matrix4 CGLTFMeshFileLoader::MeshExtractor::readMatrix4(
-		const BufferOffset& readFrom)
-{
-		float M[16];
-		for (u8 i = 0; i < 16; ++i) {
-			M[i] = readPrimitive<float>(BufferOffset(readFrom, i * sizeof(float)));
-		}
-		core::matrix4 mat;
-		mat.setM(M);
-		return convertMatrixHandedness(mat);
-}
-
-/**
  * Streams vertex positions raw data into usable buffer via reference.
  * Buffer: ref Vector<video::S3DVertex>
 */
@@ -660,13 +670,9 @@ void CGLTFMeshFileLoader::MeshExtractor::copyPositions(
 		const std::size_t accessorIdx,
 		std::vector<vertex_t>& vertices) const
 {
-
-	const auto& buffer = getBuffer(accessorIdx);
-	const auto count = getElemCount(accessorIdx);
-	const auto byteStride = getByteStride(accessorIdx);
-
-	for (std::size_t i = 0; i < count; i++) {
-		vertices[i].Pos = convertVectorHandedness(readVec3DF(BufferOffset(buffer, byteStride * i)));
+	const Accessor<core::vector3df> accessor(m_model, accessorIdx);
+	for (std::size_t i = 0; i < accessor.getCount(); i++) {
+		vertices[i].Pos = convertHandedness(accessor.get(i));
 	}
 }
 
@@ -678,12 +684,9 @@ void CGLTFMeshFileLoader::MeshExtractor::copyNormals(
 		const std::size_t accessorIdx,
 		std::vector<vertex_t>& vertices) const
 {
-	const auto& buffer = getBuffer(accessorIdx);
-	const auto count = getElemCount(accessorIdx);
-	
-	for (std::size_t i = 0; i < count; i++) {
-		vertices[i].Normal = convertVectorHandedness(readVec3DF(BufferOffset(buffer,
-			3 * sizeof(float) * i)));
+	const Accessor<core::vector3df> accessor(m_model, accessorIdx);
+	for (std::size_t i = 0; i < accessor.getCount(); i++) {
+		vertices[i].Normal = convertHandedness(accessor.get(i));
 	}
 }
 
@@ -695,72 +698,10 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 		const std::size_t accessorIdx,
 		std::vector<vertex_t>& vertices) const
 {
-
-	const auto& buffer = getBuffer(accessorIdx);
-	const auto count = getElemCount(accessorIdx);
-
-	for (std::size_t i = 0; i < count; ++i) {
-		const auto t = readVec2DF(BufferOffset(buffer,
-			2 * sizeof(float) * i));
-		vertices[i].TCoords = t;
+	const Accessor<core::vector2df> accessor(m_model, accessorIdx);
+	for (std::size_t i = 0; i < accessor.getCount(); i++) {
+		vertices[i].TCoords = accessor.get(i);
 	}
-}
-
-/**
- * The number of elements referenced by this accessor, not to be confused with the number of bytes or number of components.
- * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_count
- * Type: Integer
- * Required: YES
-*/
-std::size_t CGLTFMeshFileLoader::MeshExtractor::getElemCount(
-		const std::size_t accessorIdx) const
-{
-	return m_model.accessors->at(accessorIdx).count;
-}
-
-/**
- * The stride, in bytes, between vertex attributes.
- * When this is not defined, data is tightly packed.
- * When two or more accessors use the same buffer view, this field MUST be defined.
- * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_bufferview_bytestride
- * Required: NO
-*/
-std::size_t CGLTFMeshFileLoader::MeshExtractor::getByteStride(
-		const std::size_t accessorIdx) const
-{
-	const auto& accessor = m_model.accessors->at(accessorIdx);
-	// FIXME this does not work with sparse / zero-initialized accessors
-	const auto& view = m_model.bufferViews->at(accessor.bufferView.value());
-	return view.byteStride.value_or(accessor.elementSize());
-}
-
-/**
- * Specifies whether integer data values are normalized (true) to [0, 1] (for unsigned types) 
- * or to [-1, 1] (for signed types) when they are accessed. This property MUST NOT be set to
- * true for accessors with FLOAT or UNSIGNED_INT component type.
- * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_accessor_normalized
- * Required: NO
-*/
-bool CGLTFMeshFileLoader::MeshExtractor::isAccessorNormalized(
-	const std::size_t accessorIdx) const
-{
-	const auto& accessor = m_model.accessors->at(accessorIdx);
-	return accessor.normalized;
-}
-
-/**
- * Walk through the complex chain of the model to extract the required buffer.
- * Accessor -> BufferView -> Buffer
-*/
-CGLTFMeshFileLoader::BufferOffset CGLTFMeshFileLoader::MeshExtractor::getBuffer(
-		const std::size_t accessorIdx) const
-{
-	const auto& accessor = m_model.accessors->at(accessorIdx);
-	// FIXME this does not work with sparse / zero-initialized accessors
-	const auto& view = m_model.bufferViews->at(accessor.bufferView.value());
-	const auto& buffer = m_model.buffers->at(view.buffer);
-
-	return BufferOffset(buffer.data, view.byteOffset + accessor.byteOffset);
 }
 
 /**

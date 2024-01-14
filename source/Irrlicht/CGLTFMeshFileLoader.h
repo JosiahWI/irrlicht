@@ -33,20 +33,21 @@ public:
 	IAnimatedMesh* createMesh(io::IReadFile* file) override;
 
 private:
-	class BufferOffset
-	{
+	template<typename T>
+	static T rawget(const void *ptr);
+
+	template<class T>
+	class Accessor {
 	public:
-		BufferOffset(const std::vector<unsigned char>& buf,
-				const std::size_t offset);
-
-		BufferOffset(const BufferOffset& other,
-				const std::size_t fromOffset);
-
-		unsigned char at(const std::size_t fromOffset) const;
+		Accessor(const tiniergltf::GlTF& model, std::size_t accessorIdx);
+		static tiniergltf::Accessor::Type getType();
+		static tiniergltf::Accessor::ComponentType getComponentType();
+		std::size_t getCount() const { return count; }
+		T get(std::size_t i) const;
 	private:
-		const std::vector<unsigned char>& m_buf;
-		std::size_t m_offset;
-		int m_filesize;
+		const unsigned char *buf;
+		std::size_t byteStride;
+		std::size_t count;
 	};
 
 	class MeshExtractor {
@@ -80,25 +81,6 @@ private:
 
 		std::vector<CSkinnedMesh::SJoint*> m_loaded_nodes;
 
-		template <typename T>
-		static T readPrimitive(const BufferOffset& readFrom);
-
-		static core::vector2df readVec2DF(
-				const BufferOffset& readFrom);
-
-		/* Read a vec3df from a buffer with transformations applied.
-		 *
-		 * Values are returned in Irrlicht coordinates.
-		 */
-		static core::vector3df readVec3DF(
-				const BufferOffset& readFrom);
-		
-		static core::matrix4 readMatrix4(
-				const BufferOffset& readFrom);
-		
-		static core::quaternion readQuaternion(
-				const BufferOffset& readFrom);
-
 		void copyPositions(const std::size_t accessorIdx,
 				std::vector<vertex_t>& vertices) const;
 
@@ -107,14 +89,6 @@ private:
 
 		void copyTCoords(const std::size_t accessorIdx,
 				std::vector<vertex_t>& vertices) const;
-
-		std::size_t getElemCount(const std::size_t accessorIdx) const;
-
-		std::size_t getByteStride(const std::size_t accessorIdx) const;
-
-		bool isAccessorNormalized(const std::size_t accessorIdx) const;
-
-		BufferOffset getBuffer(const std::size_t accessorIdx) const;
 
 		std::optional<std::size_t> getIndicesAccessorIdx(const std::size_t meshIdx,
 				const std::size_t primitiveIdx) const;
