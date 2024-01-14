@@ -130,10 +130,25 @@ T CGLTFMeshFileLoader::Accessor<T>::get(std::size_t i) const
 	return rawget<T>(buf + i * byteStride);
 }
 
-// TODO support big endian systems
+// Note: clang and gcc should both optimize this out.
+static inline bool isBigEndian() {
+	const u16 x = 0xFF00;
+	return *(const u8*)(&x);
+}
+
 template<typename T>
 T CGLTFMeshFileLoader::rawget(const void *ptr) {
-	return *reinterpret_cast<const T*>(ptr);
+	if (!isBigEndian())
+		return *reinterpret_cast<const T*>(ptr);
+	// glTF uses little endian.
+	// On big-endian systems, we have to swap the byte order.
+	// TODO test this
+	const u8 *bptr = reinterpret_cast<const u8*>(ptr);
+	u8 bytes[sizeof(T)];
+	for (std::size_t i = 0; i < sizeof(T); ++i) {
+		bytes[sizeof(T) - i - 1] = bptr[i];
+	}
+	return *reinterpret_cast<const T*>(bytes);
 }
 
 // Note that these "more specialized templates" should win.

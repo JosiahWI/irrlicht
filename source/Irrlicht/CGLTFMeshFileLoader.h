@@ -45,7 +45,7 @@ private:
 		std::size_t getCount() const { return count; }
 		T get(std::size_t i) const;
 	private:
-		const unsigned char *buf;
+		const u8 *buf;
 		std::size_t byteStride;
 		std::size_t count;
 	};
