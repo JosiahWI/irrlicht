@@ -8,12 +8,10 @@
 #include "irrTypes.h"
 #include "path.h"
 #include "S3DVertex.h"
-#include "vector2d.h"
-#include "vector3d.h"
+
+#include "tiniergltf.hpp"
 
 #include <functional>
-#include <tiniergltf.hpp>
-
 #include <cstddef>
 #include <tuple>
 #include <vector>
@@ -39,7 +37,11 @@ private:
 
 	template<class T>
 	class Accessor {
-		typedef std::variant<const u8*, std::vector<T>, std::tuple<>> Source; //, std::unique_ptr<T[]>, std::tuple<>> Source;
+		struct BufferSource {
+			const u8* ptr;
+			std::size_t byteStride;
+		};
+		using Source = std::variant<BufferSource, std::vector<T>, std::tuple<>>;
 	public:
 		static Accessor sparseIndices(
 				const tiniergltf::GlTF& model,
@@ -59,16 +61,14 @@ private:
 		std::size_t getCount() const { return count; }
 		T get(std::size_t i) const;
 	private:
-		Accessor(Source source, std::size_t byteStride, std::size_t count)
-			: source(source), byteStride(byteStride), count(count) {}
-		// HACK the 0 byte strides here aren't clean.
+		Accessor(const u8* ptr, std::size_t byteStride, std::size_t count)
+			: source(BufferSource {ptr, byteStride}), count(count) {}
 		Accessor(std::vector<T> vec, std::size_t count)
-			: source(vec), byteStride(0), count(count) {}
+			: source(vec), count(count) {}
 		Accessor(std::size_t count)
-			: source(std::make_tuple()), byteStride(0), count(count) {}
+			: source(std::make_tuple()), count(count) {}
 		// Directly from buffer, sparse, or default-initialized
 		const Source source;
-		const std::size_t byteStride;
 		const std::size_t count;
 	};
 

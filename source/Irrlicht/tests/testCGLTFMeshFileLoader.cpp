@@ -2,13 +2,13 @@
 #include "vector3d.h"
 
 #include <irrlicht.h>
+#include <array>
 
 // Catch needs to be included after Irrlicht so that it sees operator<<
 // declarations.
 #define CATCH_CONFIG_MAIN
 #include <catch.hpp>
 
-using namespace std; // HACK
 using v3f = irr::core::vector3df;
 
 class ScopedMesh

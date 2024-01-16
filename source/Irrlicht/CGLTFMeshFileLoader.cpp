@@ -8,8 +8,10 @@
 #include "path.h"
 #include "S3DVertex.h"
 #include "quaternion.h"
-#include "tiniergltf.hpp"
 #include "vector3d.h"
+
+#include "tiniergltf.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstring>
@@ -147,7 +149,10 @@ CGLTFMeshFileLoader::Accessor<T>::make(const tiniergltf::GlTF& model, std::size_
 		})();
 
 		const auto valuesAccessor = Accessor<T>::sparseValues(model,
-				accessor.sparse->values, overriddenCount, base.byteStride);
+				accessor.sparse->values, overriddenCount,
+				accessor.bufferView.has_value()
+				? model.bufferViews->at(*accessor.bufferView).byteStride.value_or(accessor.elementSize())
+				: accessor.elementSize());
 
 		for (std::size_t i = 0; i < overriddenCount; ++i) {
 			u32 index;
@@ -208,8 +213,9 @@ template<class T>
 T CGLTFMeshFileLoader::Accessor<T>::get(std::size_t i) const
 {
 	// Buffer-based accessor: Read directly from the buffer.
-	if (std::holds_alternative<const u8*>(source)) {
-		return rawget<T>(std::get<const u8*>(source) + i * byteStride);
+	if (std::holds_alternative<BufferSource>(source)) {
+		const auto bufsrc = std::get<BufferSource>(source);
+		return rawget<T>(bufsrc.ptr + i * bufsrc.byteStride);
 	}
 	// Array-based accessor (used for sparse accessors): Read from array.
 	if (std::holds_alternative<std::vector<T>>(source)) {
@@ -736,7 +742,6 @@ std::optional<std::vector<video::S3DVertex>> CGLTFMeshFileLoader::MeshExtractor:
 	}
 
 	std::vector<vertex_t> vertices{};
-	// HACK peeking directly in the accessor data doesn't feel right
 	const auto vertexCount = m_model.accessors->at(*positionAccessorIdx).count;
 	vertices.resize(vertexCount);
 	copyPositions(*positionAccessorIdx, vertices);
