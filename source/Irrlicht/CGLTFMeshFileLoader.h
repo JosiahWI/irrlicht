@@ -15,6 +15,7 @@
 #include <tiniergltf.hpp>
 
 #include <cstddef>
+#include <tuple>
 #include <vector>
 
 namespace irr
@@ -38,22 +39,47 @@ private:
 
 	template<class T>
 	class Accessor {
+		typedef std::variant<const u8*, std::vector<T>, std::tuple<>> Source; //, std::unique_ptr<T[]>, std::tuple<>> Source;
 	public:
-		Accessor(const tiniergltf::GlTF& model, std::size_t accessorIdx);
+		static Accessor sparseIndices(
+				const tiniergltf::GlTF& model,
+				const tiniergltf::AccessorSparseIndices &indices,
+				const std::size_t count);
+		static Accessor sparseValues(
+				const tiniergltf::GlTF& model,
+				const tiniergltf::AccessorSparseValues &values,
+				const std::size_t count,
+				const std::size_t defaultByteStride);
+		static Accessor base(
+				const tiniergltf::GlTF& model,
+				std::size_t accessorIdx);
+		static Accessor make(const tiniergltf::GlTF& model, std::size_t accessorIdx);
 		static constexpr tiniergltf::Accessor::Type getType();
 		static constexpr tiniergltf::Accessor::ComponentType getComponentType();
 		std::size_t getCount() const { return count; }
 		T get(std::size_t i) const;
 	private:
-		const u8 *buf;
-		std::size_t byteStride;
-		std::size_t count;
+		Accessor(Source source, std::size_t byteStride, std::size_t count)
+			: source(source), byteStride(byteStride), count(count) {}
+		// HACK the 0 byte strides here aren't clean.
+		Accessor(std::vector<T> vec, std::size_t count)
+			: source(vec), byteStride(0), count(count) {}
+		Accessor(std::size_t count)
+			: source(std::make_tuple()), byteStride(0), count(count) {}
+		// Directly from buffer, sparse, or default-initialized
+		const Source source;
+		const std::size_t byteStride;
+		const std::size_t count;
 	};
 
+	template<typename... Ts>
+	using AccessorVariant = std::variant<Accessor<Ts>...>;
+
+	template<std::size_t N, typename... Ts>
+	using ArrayAccessorVariant = std::variant<Accessor<std::array<Ts, N>>...>;
+
 	template<std::size_t N>
-	using NormalizedValuesAccessor = std::variant<Accessor<std::array<u8, N>>,
-			Accessor<std::array<u16, N>>,
-			Accessor<std::array<f32, N>>>;
+	using NormalizedValuesAccessor = ArrayAccessorVariant<N, u8, u16, f32>;
 
 	template<std::size_t N>
 	static NormalizedValuesAccessor<N> createNormalizedValuesAccessor(
