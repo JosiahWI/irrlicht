@@ -52,9 +52,9 @@ enable_testing()
 add_subdirectory(source/lib/catch2)
 include(FetchContent)
 FetchContent_Declare(
-  tiniergltf
-  GIT_REPOSITORY https://github.com/appgurueu/tiniergltf.git
-  GIT_TAG        40618acfb553e0595cd30ee1509587607e8e214c
+	tiniergltf
+	GIT_REPOSITORY https://github.com/appgurueu/tiniergltf.git
+	GIT_TAG 05572e691ecf8bc3fce2da76251e73779b3577e6
 )
 FetchContent_MakeAvailable(tiniergltf)
 add_subdirectory(source/Irrlicht)
