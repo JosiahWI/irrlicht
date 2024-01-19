@@ -40,7 +40,7 @@ namespace core
 {
 
 	//! 4x4 matrix. Mostly used as transformation matrix for 3d calculations.
-	/** The matrix is a D3D style matrix, column major with translations in the 4th row. */
+	/** The matrix is stored in column major order, with translations in the 4th row. */
 	template <class T>
 	class CMatrix4
 	{
