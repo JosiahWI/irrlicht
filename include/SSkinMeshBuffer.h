@@ -330,10 +330,14 @@ struct SSkinMeshBuffer : public IMeshBuffer
 	//! append the vertices and indices to the current buffer
 	void append(const void* const vertices, u32 numVertices, const u16* const indices, u32 numIndices) override {
 		if (vertices == getVertices())
-			return;
+			throw std::logic_error("can't append own vertices");
 
-		const u32 vertexCount = getVertexCount();
-		Vertices_Standard.reallocate(vertexCount + numVertices);
+		if (VertexType != video::EVT_STANDARD)
+			throw std::logic_error("invalid vertex type");
+
+		const u32 prevVertexCount = getVertexCount();
+
+		Vertices_Standard.reallocate(prevVertexCount + numVertices);
 		for (u32 i=0; i < numVertices; ++i) {
 			Vertices_Standard.push_back(static_cast<const video::S3DVertex* const>(vertices)[i]);
 			BoundingBox.addInternalPoint(static_cast<const video::S3DVertex* const>(vertices)[i].Pos);
@@ -341,12 +345,14 @@ struct SSkinMeshBuffer : public IMeshBuffer
 
 		Indices.reallocate(getIndexCount() + numIndices);
 		for (u32 i=0; i < numIndices; ++i) {
-			Indices.push_back(indices[i] + vertexCount);
+			Indices.push_back(indices[i] + prevVertexCount);
 		}
 	}
 
-	//! append the meshbuffer to the current buffer
-	void append(const IMeshBuffer* const other) override {}
+	//! NOT IMPLEMENTED YET: append the meshbuffer to the current buffer
+	void append(const IMeshBuffer* const other) override {
+		throw std::logic_error("not implemented yet");
+	}
 
 	//! get the current hardware mapping hint for vertex buffers
 	E_HARDWARE_MAPPING getHardwareMappingHint_Vertex() const override
