@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.12)
 
 # >=3.9 enables IPO; >=3.11 prefers GLVND
 if(${CMAKE_VERSION} VERSION_LESS 3.11)
@@ -50,7 +50,13 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 enable_testing()
 
 add_subdirectory(source/lib/catch2)
-add_subdirectory(source/lib/tinygltf)
+include(FetchContent)
+FetchContent_Declare(
+	tiniergltf
+	GIT_REPOSITORY https://github.com/appgurueu/tiniergltf.git
+	GIT_TAG 05572e691ecf8bc3fce2da76251e73779b3577e6
+)
+FetchContent_MakeAvailable(tiniergltf)
 add_subdirectory(source/Irrlicht)
 add_subdirectory(test)
 
