@@ -1,15 +1,18 @@
 #include "CGLTFMeshFileLoader.h"
-#include "CSkinnedMesh.h"
+
 #include "coreutil.h"
+#include "CSkinnedMesh.h"
+#include "irrTypes.h"
 #include "IAnimatedMesh.h"
 #include "IReadFile.h"
-#include "irrTypes.h"
 #include "matrix4.h"
 #include "path.h"
 #include "S3DVertex.h"
 #include "quaternion.h"
-#include "tiniergltf.hpp"
 #include "vector3d.h"
+
+#include "tiniergltf.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstring>
