@@ -39,6 +39,8 @@ namespace irr {
 
 namespace scene {
 
+using CMFL = CGLTFMeshFileLoader;
+
 // Right-to-left handedness conversions
 
 template<typename T>
@@ -71,8 +73,8 @@ core::matrix4 convertHandedness(const core::matrix4 &mat) {
 }
 
 template<class T>
-CGLTFMeshFileLoader::Accessor<T>
-CGLTFMeshFileLoader::Accessor<T>::sparseIndices(const tiniergltf::GlTF& model,
+CMFL::Accessor<T>
+CMFL::Accessor<T>::sparseIndices(const tiniergltf::GlTF& model,
 		const tiniergltf::AccessorSparseIndices &indices,
 		const std::size_t count)
 {
@@ -82,12 +84,12 @@ CGLTFMeshFileLoader::Accessor<T>::sparseIndices(const tiniergltf::GlTF& model,
 	const auto& buffer = model.buffers->at(view.buffer);
 	const auto source = buffer.data.data() + view.byteOffset + indices.byteOffset;
 
-	return CGLTFMeshFileLoader::Accessor<T>(source, byteStride, count);
+	return CMFL::Accessor<T>(source, byteStride, count);
 }
 
 template<class T>
-CGLTFMeshFileLoader::Accessor<T>
-CGLTFMeshFileLoader::Accessor<T>::sparseValues(const tiniergltf::GlTF& model,
+CMFL::Accessor<T>
+CMFL::Accessor<T>::sparseValues(const tiniergltf::GlTF& model,
 		const tiniergltf::AccessorSparseValues &values,
 		const std::size_t count,
 		const std::size_t defaultByteStride)
@@ -98,12 +100,12 @@ CGLTFMeshFileLoader::Accessor<T>::sparseValues(const tiniergltf::GlTF& model,
 	const auto& buffer = model.buffers->at(view.buffer);
 	const auto source = buffer.data.data() + view.byteOffset + values.byteOffset;
 
-	return CGLTFMeshFileLoader::Accessor<T>(source, byteStride, count);
+	return CMFL::Accessor<T>(source, byteStride, count);
 }
 
 template<class T>
-CGLTFMeshFileLoader::Accessor<T>
-CGLTFMeshFileLoader::Accessor<T>::base(const tiniergltf::GlTF& model, std::size_t accessorIdx)
+CMFL::Accessor<T>
+CMFL::Accessor<T>::base(const tiniergltf::GlTF& model, std::size_t accessorIdx)
 {
 	const auto& accessor = model.accessors->at(accessorIdx);
 
@@ -121,8 +123,8 @@ CGLTFMeshFileLoader::Accessor<T>::base(const tiniergltf::GlTF& model, std::size_
 }
 
 template<class T>
-CGLTFMeshFileLoader::Accessor<T>
-CGLTFMeshFileLoader::Accessor<T>::make(const tiniergltf::GlTF& model, std::size_t accessorIdx)
+CMFL::Accessor<T>
+CMFL::Accessor<T>::make(const tiniergltf::GlTF& model, std::size_t accessorIdx)
 {
 	const auto& accessor = model.accessors->at(accessorIdx);
 	if (accessor.componentType != getComponentType() || accessor.type != getType())
@@ -169,25 +171,25 @@ CGLTFMeshFileLoader::Accessor<T>::make(const tiniergltf::GlTF& model, std::size_
 
 #define ACCESSOR_TYPES(T, U, V) \
 	template<> \
-	constexpr tiniergltf::Accessor::Type CGLTFMeshFileLoader::Accessor<T>::getType() { \
+	constexpr tiniergltf::Accessor::Type CMFL::Accessor<T>::getType() { \
 		return tiniergltf::Accessor::Type::U; \
 	} \
 	template<> \
-	constexpr tiniergltf::Accessor::ComponentType CGLTFMeshFileLoader::Accessor<T>::getComponentType() { \
+	constexpr tiniergltf::Accessor::ComponentType CMFL::Accessor<T>::getComponentType() { \
 		return tiniergltf::Accessor::ComponentType::V; \
 	} \
 
 #define VEC_ACCESSOR_TYPES(T, U, n) \
 	template<> \
-	constexpr tiniergltf::Accessor::Type CGLTFMeshFileLoader::Accessor<std::array<T, n>>::getType() { \
+	constexpr tiniergltf::Accessor::Type CMFL::Accessor<std::array<T, n>>::getType() { \
 		return tiniergltf::Accessor::Type::VEC##n; \
 	} \
 	template<> \
-	constexpr tiniergltf::Accessor::ComponentType CGLTFMeshFileLoader::Accessor<std::array<T, n>>::getComponentType() { \
+	constexpr tiniergltf::Accessor::ComponentType CMFL::Accessor<std::array<T, n>>::getComponentType() { \
 		return tiniergltf::Accessor::ComponentType::U; \
 	} \
 	template<> \
-	std::array<T, n> CGLTFMeshFileLoader::rawget(const void *ptr) { \
+	std::array<T, n> CMFL::rawget(const void *ptr) { \
 		const T *tptr = reinterpret_cast<const T*>(ptr); \
 		std::array<T, n> res; \
 		for (u8 i = 0; i < n; ++i) \
@@ -210,7 +212,7 @@ ACCESSOR_TYPES(core::quaternion, VEC4, FLOAT)
 ACCESSOR_TYPES(core::matrix4, MAT4, FLOAT)
 
 template<class T>
-T CGLTFMeshFileLoader::Accessor<T>::get(std::size_t i) const
+T CMFL::Accessor<T>::get(std::size_t i) const
 {
 	// Buffer-based accessor: Read directly from the buffer.
 	if (std::holds_alternative<BufferSource>(source)) {
@@ -236,7 +238,7 @@ static inline bool isBigEndian() {
 }
 
 template<typename T>
-T CGLTFMeshFileLoader::rawget(const void *ptr) {
+T CMFL::rawget(const void *ptr) {
 	if (!isBigEndian())
 		return *reinterpret_cast<const T*>(ptr);
 	// glTF uses little endian.
@@ -253,7 +255,7 @@ T CGLTFMeshFileLoader::rawget(const void *ptr) {
 // Note that these "more specialized templates" should win.
 
 template<>
-core::matrix4 CGLTFMeshFileLoader::rawget(const void *ptr) {
+core::matrix4 CMFL::rawget(const void *ptr) {
 	const f32 *fptr = reinterpret_cast<const f32*>(ptr);
 	f32 M[16];
 	for (u8 i = 0; i < 16; ++i) {
@@ -265,7 +267,7 @@ core::matrix4 CGLTFMeshFileLoader::rawget(const void *ptr) {
 }
 
 template<>
-core::vector3df CGLTFMeshFileLoader::rawget(const void *ptr) {
+core::vector3df CMFL::rawget(const void *ptr) {
 	const f32 *fptr = reinterpret_cast<const f32*>(ptr);
 	return core::vector3df(
 		rawget<f32>(fptr),
@@ -274,7 +276,7 @@ core::vector3df CGLTFMeshFileLoader::rawget(const void *ptr) {
 }
 
 template<>
-core::quaternion CGLTFMeshFileLoader::rawget(const void *ptr) {
+core::quaternion CMFL::rawget(const void *ptr) {
 	const f32 *fptr = reinterpret_cast<const f32*>(ptr);
 	return core::quaternion(
 		rawget<f32>(fptr),
@@ -284,8 +286,8 @@ core::quaternion CGLTFMeshFileLoader::rawget(const void *ptr) {
 }
 
 template<std::size_t N>
-CGLTFMeshFileLoader::NormalizedValuesAccessor<N>
-CGLTFMeshFileLoader::createNormalizedValuesAccessor(
+CMFL::NormalizedValuesAccessor<N>
+CMFL::createNormalizedValuesAccessor(
 		const tiniergltf::GlTF& model,
 		const std::size_t accessorIdx)
 {
@@ -303,7 +305,7 @@ CGLTFMeshFileLoader::createNormalizedValuesAccessor(
 }
 
 template<std::size_t N>
-std::array<f32, N> CGLTFMeshFileLoader::getNormalizedValues(
+std::array<f32, N> CMFL::getNormalizedValues(
 	const NormalizedValuesAccessor<N> &accessor,
 	const std::size_t i)
 {
@@ -326,14 +328,14 @@ std::array<f32, N> CGLTFMeshFileLoader::getNormalizedValues(
 	return values;
 }
 
-CGLTFMeshFileLoader::CGLTFMeshFileLoader() noexcept
+CMFL::CGLTFMeshFileLoader() noexcept
 {
 }
 
 /**
  * The most basic portion of the code base. This tells irllicht if this file has a .gltf extension.
 */
-bool CGLTFMeshFileLoader::isALoadableFileExtension(
+bool CMFL::isALoadableFileExtension(
 		const io::path& filename) const
 {
 	return core::hasFileExtension(filename, "gltf");
@@ -342,7 +344,7 @@ bool CGLTFMeshFileLoader::isALoadableFileExtension(
 /**
  * Entry point into loading a GLTF model.
 */
-IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
+IAnimatedMesh* CMFL::createMesh(io::IReadFile* file)
 {
 	if (file->getSize() <= 0) {
 		return nullptr;
@@ -377,7 +379,7 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
  * Documentation: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#meshes
  * If material is undefined, then a default material MUST be used.
 */
-void CGLTFMeshFileLoader::MeshExtractor::deferAddMesh(
+void CMFL::MeshExtractor::deferAddMesh(
 		const std::size_t meshIdx,
 		const std::optional<std::size_t> skinIdx,
 		CSkinnedMesh *mesh,
@@ -531,7 +533,7 @@ static core::matrix4 loadTransform(std::optional<std::variant<tiniergltf::Node::
 	}
 }
 
-void CGLTFMeshFileLoader::MeshExtractor::loadNode(
+void CMFL::MeshExtractor::loadNode(
 		const std::size_t nodeIdx,
 		CSkinnedMesh* mesh,
 		CSkinnedMesh::SJoint *parent)
@@ -556,7 +558,7 @@ void CGLTFMeshFileLoader::MeshExtractor::loadNode(
 	}
 }
 
-void CGLTFMeshFileLoader::MeshExtractor::loadNodes(CSkinnedMesh* mesh)
+void CMFL::MeshExtractor::loadNodes(CSkinnedMesh* mesh)
 {
 	m_loaded_nodes = std::vector<CSkinnedMesh::SJoint*>(m_model.nodes->size());
 
@@ -577,7 +579,7 @@ void CGLTFMeshFileLoader::MeshExtractor::loadNodes(CSkinnedMesh* mesh)
 	}
 }
 
-void CGLTFMeshFileLoader::MeshExtractor::loadSkins(CSkinnedMesh* mesh)
+void CMFL::MeshExtractor::loadSkins(CSkinnedMesh* mesh)
 {
 	if (!m_model.skins.has_value())
 		return;
@@ -594,7 +596,7 @@ void CGLTFMeshFileLoader::MeshExtractor::loadSkins(CSkinnedMesh* mesh)
 	}
 }
 
-void CGLTFMeshFileLoader::MeshExtractor::loadAnimation(
+void CMFL::MeshExtractor::loadAnimation(
 	const std::size_t animIdx, CSkinnedMesh* mesh)
 {
 	const auto &anim = m_model.animations->at(animIdx);
@@ -645,7 +647,7 @@ void CGLTFMeshFileLoader::MeshExtractor::loadAnimation(
 	}
 }
 
-void CGLTFMeshFileLoader::MeshExtractor::load(CSkinnedMesh* mesh)
+void CMFL::MeshExtractor::load(CSkinnedMesh* mesh)
 {
 	loadNodes(mesh);
 	for (const auto &loadMesh : m_mesh_loaders) {
@@ -661,13 +663,13 @@ void CGLTFMeshFileLoader::MeshExtractor::load(CSkinnedMesh* mesh)
 	mesh->finalize();
 }
 
-CGLTFMeshFileLoader::MeshExtractor::MeshExtractor(
+CMFL::MeshExtractor::MeshExtractor(
 		const tiniergltf::GlTF& model) noexcept
 	: m_model(model)
 {
 }
 
-CGLTFMeshFileLoader::MeshExtractor::MeshExtractor(
+CMFL::MeshExtractor::MeshExtractor(
 		const tiniergltf::GlTF&& model) noexcept
 	: m_model(model)
 {
@@ -676,7 +678,7 @@ CGLTFMeshFileLoader::MeshExtractor::MeshExtractor(
 /**
  * Extracts GLTF mesh indices into the irrlicht model.
 */
-std::optional<std::vector<u16>> CGLTFMeshFileLoader::MeshExtractor::getIndices(
+std::optional<std::vector<u16>> CMFL::MeshExtractor::getIndices(
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
 {
@@ -701,7 +703,7 @@ std::optional<std::vector<u16>> CGLTFMeshFileLoader::MeshExtractor::getIndices(
 
 	std::vector<u16> indices;
 	for (std::size_t i = 0; i < count; ++i) {
-		// TODO (low-priority) also reverse winding order based on determinant of global transform
+		// TODO (low-priority, maybe never) also reverse winding order based on determinant of global transform
 		// FIXME this hack also reverses triangle draw order
 		std::size_t elemIdx = count - i - 1; // reverse index order
 		u16 index;
@@ -730,7 +732,7 @@ std::optional<std::vector<u16>> CGLTFMeshFileLoader::MeshExtractor::getIndices(
 /**
  * Create a vector of video::S3DVertex (model data) from a mesh & primitive index.
 */
-std::optional<std::vector<video::S3DVertex>> CGLTFMeshFileLoader::MeshExtractor::getVertices(
+std::optional<std::vector<video::S3DVertex>> CMFL::MeshExtractor::getVertices(
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
 {
@@ -764,7 +766,7 @@ std::optional<std::vector<video::S3DVertex>> CGLTFMeshFileLoader::MeshExtractor:
 /**
  * Get the amount of meshes that a model contains.
 */
-std::size_t CGLTFMeshFileLoader::MeshExtractor::getMeshCount() const
+std::size_t CMFL::MeshExtractor::getMeshCount() const
 {
 	return m_model.meshes->size();
 }
@@ -772,7 +774,7 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getMeshCount() const
 /**
  * Get the amount of primitives that a mesh in a model contains.
 */
-std::size_t CGLTFMeshFileLoader::MeshExtractor::getPrimitiveCount(
+std::size_t CMFL::MeshExtractor::getPrimitiveCount(
 		const std::size_t meshIdx) const
 {
 	return m_model.meshes->at(meshIdx).primitives.size();
@@ -782,7 +784,7 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getPrimitiveCount(
  * Streams vertex positions raw data into usable buffer via reference.
  * Buffer: ref Vector<video::S3DVertex>
 */
-void CGLTFMeshFileLoader::MeshExtractor::copyPositions(
+void CMFL::MeshExtractor::copyPositions(
 		const std::size_t accessorIdx,
 		std::vector<vertex_t>& vertices) const
 {
@@ -796,7 +798,7 @@ void CGLTFMeshFileLoader::MeshExtractor::copyPositions(
  * Streams normals raw data into usable buffer via reference.
  * Buffer: ref Vector<video::S3DVertex>
 */
-void CGLTFMeshFileLoader::MeshExtractor::copyNormals(
+void CMFL::MeshExtractor::copyNormals(
 		const std::size_t accessorIdx,
 		std::vector<vertex_t>& vertices) const
 {
@@ -810,7 +812,7 @@ void CGLTFMeshFileLoader::MeshExtractor::copyNormals(
  * Streams texture coordinate raw data into usable buffer via reference.
  * Buffer: ref Vector<video::S3DVertex>
 */
-void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
+void CMFL::MeshExtractor::copyTCoords(
 		const std::size_t accessorIdx,
 		std::vector<vertex_t>& vertices) const
 {
@@ -825,7 +827,7 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 /**
  * This is where the actual model's GLTF file is loaded and parsed by tiniergltf.
 */
-std::optional<tiniergltf::GlTF> CGLTFMeshFileLoader::tryParseGLTF(io::IReadFile* file)
+std::optional<tiniergltf::GlTF> CMFL::tryParseGLTF(io::IReadFile* file)
 {
 	auto size = file->getSize();
 	auto buf = std::make_unique<char[]>(size + 1);
