@@ -54,8 +54,10 @@ TEST_CASE("load empty gltf file") {
 
 TEST_CASE("minimal triangle") {
 	auto path = GENERATE(
-		"source/Irrlicht/tests/assets/minimal_triangle.gltf",
-		"source/Irrlicht/tests/assets/triangle_with_vertex_stride.gltf");
+			"source/Irrlicht/tests/assets/minimal_triangle.gltf",
+			"source/Irrlicht/tests/assets/triangle_with_vertex_stride.gltf",
+			// Test non-indexed geometry.
+			"source/Irrlicht/tests/assets/triangle_without_indices.gltf");
 	INFO(path);
 	ScopedMesh sm(path);
 	REQUIRE(sm.getMesh() != nullptr);

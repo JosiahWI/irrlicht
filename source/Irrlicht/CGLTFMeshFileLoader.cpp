@@ -151,8 +151,11 @@ void CGLTFMeshFileLoader::MeshExtractor::loadMesh(
 		} else {
 			// Non-indexed geometry
 			indices = std::vector<u16>(vertices->size());
-			for (u16 i = 0; i < vertices->size(); i++) {
-				indices[i] = i;
+			for (std::size_t i = 0; i < vertices->size(); i += 3) {
+				// Reverse winding order per triangle
+				indices[i] = i + 2;
+				indices[i + 1] = i + 1;
+				indices[i + 2] = i;
 			}
 		}
 
