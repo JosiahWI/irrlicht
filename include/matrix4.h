@@ -233,17 +233,14 @@ namespace core
 			//! Translate a vector by the inverse of the translation part of this matrix.
 			void inverseTranslateVect( vector3df& vect ) const;
 
-			//! Rotate a vector by the inverse of the rotation part of this matrix.
-			void inverseRotateVect( vector3df& vect ) const;
+			//! Scale a vector, then rotate by the inverse of the rotation part of this matrix.
+			void scaleAndInverseRotateVect( vector3df& vect ) const;
 
-			//! Rotate a vector by the rotation part of this matrix.
+			//! Rotate and scale a vector. Applies both rotation & scale part of the matrix.
 			void rotateAndScaleVect( vector3df& vect ) const;
 
 			//! An alternate transform vector method, writing into a second vector
 			void rotateAndScaleVect(core::vector3df& out, const core::vector3df& in) const;
-
-			//! An alternate transform vector method, writing into an array of 3 floats
-			void rotateVect(T *out,const core::vector3df &in) const;
 
 			//! Transforms the vector by this matrix
 			/** This operation is performed as if the vector was 4d with the 4th component =1 */
@@ -1170,7 +1167,6 @@ namespace core
 		vect.Z = static_cast<f32>(tmp.X*M[2] + tmp.Y*M[6] + tmp.Z*M[10]);
 	}
 
-	//! An alternate transform vector method, writing into a second vector
 	template <class T>
 	inline void CMatrix4<T>::rotateAndScaleVect(core::vector3df& out, const core::vector3df& in) const
 	{
@@ -1180,7 +1176,7 @@ namespace core
 	}
 
 	template <class T>
-	inline void CMatrix4<T>::inverseRotateVect( vector3df& vect ) const
+	inline void CMatrix4<T>::scaleAndInverseRotateVect( vector3df& vect ) const
 	{
 		vector3d<T> tmp(static_cast<T>(vect.X), static_cast<T>(vect.Y), static_cast<T>(vect.Z));
 		vect.X = static_cast<f32>(tmp.X*M[0] + tmp.Y*M[1] + tmp.Z*M[2]);
