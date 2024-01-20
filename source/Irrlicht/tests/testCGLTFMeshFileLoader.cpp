@@ -49,10 +49,29 @@ private:
 	irr::scene::IAnimatedMesh *m_mesh;
 };
 
-TEST_CASE("load empty gltf file")
+TEST_CASE("error cases")
 {
-	ScopedMesh sm("source/Irrlicht/tests/assets/empty.gltf");
-	CHECK(sm.getMesh() == nullptr);
+	SECTION("null file pointer")
+	{
+		ScopedMesh sm(nullptr);
+		CHECK(sm.getMesh() == nullptr);
+	}
+	SECTION("empty file")
+	{
+		ScopedMesh sm("source/Irrlicht/tests/assets/invalid/empty.gltf");
+		CHECK(sm.getMesh() == nullptr);
+	}
+	SECTION("invalid JSON")
+	{
+		ScopedMesh sm("source/Irrlicht/tests/assets/invalid/json_missing_brace.gltf");
+		CHECK(sm.getMesh() == nullptr);
+	}
+	// This is an example of something that should be validated by tiniergltf.
+	SECTION("invalid bufferview bounds")
+	{
+		ScopedMesh sm("source/Irrlicht/tests/assets/invalid/invalid_bufferview_bounds.gltf");
+		CHECK(sm.getMesh() == nullptr);
+	}
 }
 
 TEST_CASE("minimal triangle")
@@ -141,18 +160,6 @@ TEST_CASE("blender cube")
 		CHECK(vertices[3].TCoords == irr::core::vector2df{0.6250f, 1.0f});
 		CHECK(vertices[6].TCoords == irr::core::vector2df{0.375f, 0.75f});
 	}
-}
-
-TEST_CASE("mesh loader returns nullptr when given null file pointer")
-{
-	ScopedMesh sm(nullptr);
-	CHECK(sm.getMesh() == nullptr);
-}
-
-TEST_CASE("invalid JSON returns nullptr")
-{
-	ScopedMesh sm("source/Irrlicht/tests/assets/json_missing_brace.gltf");
-	CHECK(sm.getMesh() == nullptr);
 }
 
 TEST_CASE("blender cube scaled")
