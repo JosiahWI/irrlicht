@@ -1,8 +1,7 @@
 #ifndef __C_GLTF_MESH_FILE_LOADER_INCLUDED__
 #define __C_GLTF_MESH_FILE_LOADER_INCLUDED__
 
-#include "CSkinnedMesh.h"
-#include "IAnimatedMesh.h"
+#include "ISkinnedMesh.h"
 #include "IMeshLoader.h"
 #include "IReadFile.h"
 #include "irrTypes.h"
@@ -52,9 +51,13 @@ private:
 	public:
 		using vertex_t = video::S3DVertex;
 
-		MeshExtractor(const tiniergltf::GlTF& model) noexcept;
+		MeshExtractor(const tiniergltf::GlTF &model,
+				ISkinnedMesh *mesh) noexcept
+			: m_gltf_model(model), m_irr_model(mesh) {};
 
-		MeshExtractor(const tiniergltf::GlTF&& model) noexcept;
+		MeshExtractor(const tiniergltf::GlTF &&model,
+				ISkinnedMesh *mesh) noexcept
+			: m_gltf_model(model), m_irr_model(mesh) {};
 
 		/* Gets indices for the given mesh/primitive.
 		 *
@@ -70,10 +73,11 @@ private:
 
 		std::size_t getPrimitiveCount(const std::size_t meshIdx) const;
 
-		void loadNodes(CSkinnedMesh* mesh) const;
+		void loadNodes() const;
 
 	private:
-		tiniergltf::GlTF m_model;
+		const tiniergltf::GlTF m_gltf_model;
+		ISkinnedMesh *m_irr_model;
 
 		template <typename T>
 		static T readPrimitive(const BufferOffset& readFrom);
@@ -124,13 +128,11 @@ private:
 		
 		void loadMesh(
 			std::size_t meshIdx,
-			CSkinnedMesh *mesh,
-			CSkinnedMesh::SJoint *parentJoint) const;
+			ISkinnedMesh::SJoint *parentJoint) const;
 
 		void loadNode(
 			const std::size_t nodeIdx,
-			CSkinnedMesh* mesh,
-			CSkinnedMesh::SJoint *parentJoint) const;
+			ISkinnedMesh::SJoint *parentJoint) const;
 	};
 
 	std::optional<tiniergltf::GlTF> tryParseGLTF(io::IReadFile* file);

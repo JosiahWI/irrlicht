@@ -2,8 +2,8 @@
 
 #include "coreutil.h"
 #include "CSkinnedMesh.h"
+#include "ISkinnedMesh.h"
 #include "irrTypes.h"
-#include "IAnimatedMesh.h"
 #include "IReadFile.h"
 #include "matrix4.h"
 #include "path.h"
@@ -98,10 +98,10 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 		return nullptr;
 	}
 
-	MeshExtractor parser(std::move(model.value()));
-	CSkinnedMesh *mesh = new CSkinnedMesh();
+	ISkinnedMesh *mesh = new CSkinnedMesh();
+	MeshExtractor parser(std::move(model.value()), mesh);
 	try {
-		parser.loadNodes(mesh);
+		parser.loadNodes();
 	} catch (std::runtime_error &e) {
 		mesh->drop();
 		return nullptr;
@@ -109,6 +109,38 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 	return mesh;
 }
 
+static void transformVertices(std::vector<video::S3DVertex> &vertices, const core::matrix4 &transform)
+{
+	for (auto &vertex : vertices) {
+		// Apply scaling, rotation and rotation (in that order) to the position.
+		transform.transformVect(vertex.Pos);
+		// For the normal, we do not want to apply the translation.
+		// TODO note that this also applies scaling; the Irrlicht method is misnamed.
+		transform.rotateVect(vertex.Normal);
+		// Renormalize (length might have been affected by scaling).
+		vertex.Normal.normalize();
+	}
+}
+
+static void checkIndices(const std::vector<u16> &indices, const std::size_t nVerts)
+{
+	for (u16 index : indices) {
+		if (index >= nVerts)
+			throw std::runtime_error("index out of bounds");
+	}
+}
+
+static std::vector<u16> generateIndices(const std::size_t nVerts)
+{
+	std::vector<u16> indices(nVerts);
+	for (std::size_t i = 0; i < nVerts; i += 3) {
+		// Reverse winding order per triangle
+		indices[i] = i + 2;
+		indices[i + 1] = i + 1;
+		indices[i + 2] = i;
+	}
+	return indices;
+}
 
 /**
  * Load up the rawest form of the model. The vertex positions and indices.
@@ -117,8 +149,7 @@ IAnimatedMesh* CGLTFMeshFileLoader::createMesh(io::IReadFile* file)
 */
 void CGLTFMeshFileLoader::MeshExtractor::loadMesh(
 		const std::size_t meshIdx,
-		CSkinnedMesh *mesh,
-		CSkinnedMesh::SJoint *parent) const
+		ISkinnedMesh::SJoint *parent) const
 {
 	for (std::size_t j = 0; j < getPrimitiveCount(meshIdx); ++j) {
 		auto vertices = getVertices(meshIdx, j);
@@ -130,36 +161,19 @@ void CGLTFMeshFileLoader::MeshExtractor::loadMesh(
 			throw std::runtime_error("too many vertices");
 
 		// Apply the global transform along the parent chain.
-		for (auto &vertex : *vertices) {
-			parent->GlobalMatrix.transformVect(vertex.Pos);
-			// Apply scaling, rotation and translation (in that order) to the normal.
-			parent->GlobalMatrix.transformVect(vertex.Normal);
-			// Undo the translation, leaving us with scaling and rotation.
-			vertex.Normal -= parent->GlobalMatrix.getTranslation();
-			// Renormalize (length might have been affected by scaling).
-			vertex.Normal.normalize();
-		}
+		transformVertices(*vertices, parent->GlobalMatrix);
 		
 		auto maybeIndices = getIndices(meshIdx, j);
 		std::vector<u16> indices;
 		if (maybeIndices.has_value()) {
-			indices = std::move(maybeIndices.value());
-			for (u16 index : indices) {
-				if (index >= vertices->size())
-					throw std::runtime_error("index out of bounds");
-			}
+			indices = std::move(*maybeIndices);
+			checkIndices(indices, vertices->size());
 		} else {
 			// Non-indexed geometry
-			indices = std::vector<u16>(vertices->size());
-			for (std::size_t i = 0; i < vertices->size(); i += 3) {
-				// Reverse winding order per triangle
-				indices[i] = i + 2;
-				indices[i + 1] = i + 1;
-				indices[i + 2] = i;
-			}
+			indices = generateIndices(vertices->size());
 		}
 
-		auto *meshbuf = mesh->addMeshBuffer();
+		auto *meshbuf = m_irr_model->addMeshBuffer();
 		meshbuf->append(vertices->data(), vertices->size(),
 			indices.data(), indices.size());
 	}
@@ -175,43 +189,43 @@ static core::matrix4 leftToRight = core::matrix4(
 );
 static core::matrix4 rightToLeft = leftToRight;
 
-static core::matrix4 loadTransform(std::optional<std::variant<tiniergltf::Node::Matrix, tiniergltf::Node::TRS>> transform) {
-	if (!transform.has_value()) {
-		return core::matrix4();
-	}
-	core::matrix4 mat;
-	if (std::holds_alternative<tiniergltf::Node::Matrix>(*transform)) {
-		const auto &m = std::get<tiniergltf::Node::Matrix>(*transform);
-		// Note: Under the hood, this casts these doubles to floats.
-		mat = core::matrix4(
+static core::matrix4 loadTransform(const tiniergltf::Node::Matrix &m)
+{
+	// Note: Under the hood, this casts these doubles to floats.
+	return core::matrix4(
 			m[0], m[1], m[2], m[3],
 			m[4], m[5], m[6], m[7],
 			m[8], m[9], m[10], m[11],
 			m[12], m[13], m[14], m[15]);
-		// glTF uses column-major order, Irrlicht uses row-major order.
-		mat = mat.getTransposed();
-	} else {
-		const auto &trs = std::get<tiniergltf::Node::TRS>(*transform);
-		const auto &trans = trs.translation;
-		const auto &rot = trs.rotation;
-		const auto &scale = trs.scale;
-		core::matrix4 transMat;
-		transMat.setTranslation(core::vector3df(trans[0], trans[1], trans[2]));
-		core::matrix4 rotMat = core::quaternion(rot[0], rot[1], rot[2], rot[3]).getMatrix();
-		core::matrix4 scaleMat;
-		scaleMat.setScale(core::vector3df(scale[0], scale[1], scale[2]));
-		mat = transMat * rotMat * scaleMat;
+}
+
+static core::matrix4 loadTransform(const tiniergltf::Node::TRS &trs)
+{
+	const auto &trans = trs.translation;
+	const auto &rot = trs.rotation;
+	const auto &scale = trs.scale;
+	core::matrix4 transMat;
+	transMat.setTranslation(core::vector3df(trans[0], trans[1], trans[2]));
+	core::matrix4 rotMat = core::quaternion(rot[0], rot[1], rot[2], rot[3]).getMatrix();
+	core::matrix4 scaleMat;
+	scaleMat.setScale(core::vector3df(scale[0], scale[1], scale[2]));
+	return transMat * rotMat * scaleMat;
+}
+
+static core::matrix4 loadTransform(std::optional<std::variant<tiniergltf::Node::Matrix, tiniergltf::Node::TRS>> transform) {
+	if (!transform.has_value()) {
+		return core::matrix4();
 	}
+	core::matrix4 mat = std::visit([](const auto &t) { return loadTransform(t); }, *transform);
 	return rightToLeft * mat * leftToRight;
 }
 
 void CGLTFMeshFileLoader::MeshExtractor::loadNode(
 		const std::size_t nodeIdx,
-		CSkinnedMesh* mesh,
-		CSkinnedMesh::SJoint *parent) const
+		ISkinnedMesh::SJoint *parent) const
 {
-	const auto &node = m_model.nodes->at(nodeIdx);
-	auto *joint = mesh->addJoint(parent);
+	const auto &node = m_gltf_model.nodes->at(nodeIdx);
+	auto *joint = m_irr_model->addJoint(parent);
 	const core::matrix4 transform = loadTransform(node.transform);
 	joint->LocalMatrix = transform;
 	joint->GlobalMatrix = parent ? parent->GlobalMatrix * joint->LocalMatrix : joint->LocalMatrix;
@@ -219,19 +233,19 @@ void CGLTFMeshFileLoader::MeshExtractor::loadNode(
 		joint->Name = node.name->c_str();
 	}
 	if (node.mesh.has_value()) {
-		loadMesh(*node.mesh, mesh, joint);
+		loadMesh(*node.mesh, joint);
 	}
 	if (node.children.has_value()) {
 		for (const auto &child : *node.children) {
-			loadNode(child, mesh, joint);
+			loadNode(child, joint);
 		}
 	}
 }
 
-void CGLTFMeshFileLoader::MeshExtractor::loadNodes(CSkinnedMesh* mesh) const
+void CGLTFMeshFileLoader::MeshExtractor::loadNodes() const
 {
-	std::vector<bool> isChild(m_model.nodes->size());
-	for (const auto &node : *m_model.nodes) {
+	std::vector<bool> isChild(m_gltf_model.nodes->size());
+	for (const auto &node : *m_gltf_model.nodes) {
 		if (!node.children.has_value())
 			continue;
 		for (const auto &child : *node.children) {
@@ -240,23 +254,11 @@ void CGLTFMeshFileLoader::MeshExtractor::loadNodes(CSkinnedMesh* mesh) const
 	}
 	// Load all nodes that aren't children.
 	// Children will be loaded by their parent nodes.
-	for (std::size_t i = 0; i < m_model.nodes->size(); ++i) {
+	for (std::size_t i = 0; i < m_gltf_model.nodes->size(); ++i) {
 		if (!isChild[i]) {
-			loadNode(i, mesh, nullptr);
+			loadNode(i, nullptr);
 		}
 	}
-}
-
-CGLTFMeshFileLoader::MeshExtractor::MeshExtractor(
-		const tiniergltf::GlTF& model) noexcept
-	: m_model(model)
-{
-}
-
-CGLTFMeshFileLoader::MeshExtractor::MeshExtractor(
-		const tiniergltf::GlTF&& model) noexcept
-	: m_model(model)
-{
 }
 
 /**
@@ -269,7 +271,7 @@ std::optional<std::vector<u16>> CGLTFMeshFileLoader::MeshExtractor::getIndices(
 	const auto accessorIdx = getIndicesAccessorIdx(meshIdx, primitiveIdx);
 	if (!accessorIdx.has_value())
 		return std::nullopt; // non-indexed geometry
-	const auto &accessor = m_model.accessors->at(accessorIdx.value());
+	const auto &accessor = m_gltf_model.accessors->at(accessorIdx.value());
 	
 	const auto& buf = getBuffer(accessorIdx.value());
 
@@ -297,7 +299,7 @@ std::optional<std::vector<u16>> CGLTFMeshFileLoader::MeshExtractor::getIndices(
 				// Use >= here for consistency.
 				if (indexWide >= std::numeric_limits<u16>::max())
 					throw std::runtime_error("index too large (>= 65536)");
-				index = (u16) indexWide;
+				index = static_cast<u16>(indexWide);
 				break;
 			}
 			default:
@@ -347,7 +349,7 @@ std::optional<std::vector<video::S3DVertex>> CGLTFMeshFileLoader::MeshExtractor:
 */
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getMeshCount() const
 {
-	return m_model.meshes->size();
+	return m_gltf_model.meshes->size();
 }
 
 /**
@@ -356,7 +358,7 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getMeshCount() const
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getPrimitiveCount(
 		const std::size_t meshIdx) const
 {
-	return m_model.meshes->at(meshIdx).primitives.size();
+	return m_gltf_model.meshes->at(meshIdx).primitives.size();
 }
 
 /**
@@ -472,7 +474,7 @@ void CGLTFMeshFileLoader::MeshExtractor::copyTCoords(
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getElemCount(
 		const std::size_t accessorIdx) const
 {
-	return m_model.accessors->at(accessorIdx).count;
+	return m_gltf_model.accessors->at(accessorIdx).count;
 }
 
 /**
@@ -485,9 +487,9 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getElemCount(
 std::size_t CGLTFMeshFileLoader::MeshExtractor::getByteStride(
 		const std::size_t accessorIdx) const
 {
-	const auto& accessor = m_model.accessors->at(accessorIdx);
+	const auto& accessor = m_gltf_model.accessors->at(accessorIdx);
 	// FIXME this does not work with sparse / zero-initialized accessors
-	const auto& view = m_model.bufferViews->at(accessor.bufferView.value());
+	const auto& view = m_gltf_model.bufferViews->at(accessor.bufferView.value());
 	return view.byteStride.value_or(accessor.elementSize());
 }
 
@@ -501,7 +503,7 @@ std::size_t CGLTFMeshFileLoader::MeshExtractor::getByteStride(
 bool CGLTFMeshFileLoader::MeshExtractor::isAccessorNormalized(
 	const std::size_t accessorIdx) const
 {
-	const auto& accessor = m_model.accessors->at(accessorIdx);
+	const auto& accessor = m_gltf_model.accessors->at(accessorIdx);
 	return accessor.normalized;
 }
 
@@ -512,10 +514,10 @@ bool CGLTFMeshFileLoader::MeshExtractor::isAccessorNormalized(
 CGLTFMeshFileLoader::BufferOffset CGLTFMeshFileLoader::MeshExtractor::getBuffer(
 		const std::size_t accessorIdx) const
 {
-	const auto& accessor = m_model.accessors->at(accessorIdx);
+	const auto& accessor = m_gltf_model.accessors->at(accessorIdx);
 	// FIXME this does not work with sparse / zero-initialized accessors
-	const auto& view = m_model.bufferViews->at(accessor.bufferView.value());
-	const auto& buffer = m_model.buffers->at(view.buffer);
+	const auto& view = m_gltf_model.bufferViews->at(accessor.bufferView.value());
+	const auto& buffer = m_gltf_model.buffers->at(view.buffer);
 
 	return BufferOffset(buffer.data, view.byteOffset);
 }
@@ -532,7 +534,7 @@ std::optional<std::size_t> CGLTFMeshFileLoader::MeshExtractor::getIndicesAccesso
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
 {
-	return m_model.meshes->at(meshIdx).primitives[primitiveIdx].indices;
+	return m_gltf_model.meshes->at(meshIdx).primitives[primitiveIdx].indices;
 }
 
 /**
@@ -544,7 +546,7 @@ std::optional<std::size_t> CGLTFMeshFileLoader::MeshExtractor::getPositionAccess
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
 {
-	return m_model.meshes->at(meshIdx).primitives[primitiveIdx].attributes.position;
+	return m_gltf_model.meshes->at(meshIdx).primitives[primitiveIdx].attributes.position;
 }
 
 /**
@@ -557,7 +559,7 @@ std::optional<std::size_t> CGLTFMeshFileLoader::MeshExtractor::getNormalAccessor
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
 {
-	return m_model.meshes->at(meshIdx).primitives[primitiveIdx].attributes.normal;
+	return m_gltf_model.meshes->at(meshIdx).primitives[primitiveIdx].attributes.normal;
 }
 
 /**
@@ -570,7 +572,7 @@ std::optional<std::size_t> CGLTFMeshFileLoader::MeshExtractor::getTCoordAccessor
 		const std::size_t meshIdx,
 		const std::size_t primitiveIdx) const
 {
-	const auto& texcoords = m_model.meshes->at(meshIdx).primitives[primitiveIdx].attributes.texcoord;
+	const auto& texcoords = m_gltf_model.meshes->at(meshIdx).primitives[primitiveIdx].attributes.texcoord;
 	if (!texcoords.has_value())
 		return std::nullopt;
 	return texcoords->at(0);
